@@ -1,0 +1,10 @@
+{
+    "evenBetterToml.schema.links": true,
+    "evenBetterToml.formatter.alignEntries": true,
+    "rust-analyzer.restartServerOnConfigChange": true,
+    "lldb.displayFormat": "auto",
+    "lldb.showDisassembly": "auto",
+    "lldb.dereferencePointers": true,
+    "lldb.consoleMode": "commands"
+
+}
