@@ -48,6 +48,7 @@ impl Translator for FunTranslator {
             .map_err(|_| HttpClientError::RequestFailed)
             .and_then(|r| match r.status() {
                 StatusCode::NOT_FOUND => Err(HttpClientError::NotFound),
+                StatusCode::TOO_MANY_REQUESTS => Err(HttpClientError::RateLimited),
                 // NOTE: by default redirects followed automatically by reqwest::Client: https://docs.rs/reqwest/latest/reqwest/#redirect-policies
                 _ => Ok(r),
             })?
@@ -121,6 +122,25 @@ mod tests {
             .await;
 
         assert!(matches!(result, Err(HttpClientError::NotFound)));
+        mock.assert_async().await;
+    }
+
+    #[tokio::test]
+    async fn returns_rate_limited_on_429() {
+        let mut server = mockito::Server::new_async().await;
+        let mock = server
+            .mock("GET", "/shakespeare?text=Unknown")
+            .with_status(429)
+            .create_async()
+            .await;
+
+        let translator = FunTranslator::new(reqwest::Client::new(), server.url());
+
+        let result = translator
+            .translate("Unknown", TranslatorType::Shakespeare)
+            .await;
+
+        assert!(matches!(result, Err(HttpClientError::RateLimited)));
         mock.assert_async().await;
     }
 

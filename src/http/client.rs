@@ -18,6 +18,7 @@ impl fmt::Display for TranslatorType {
 #[derive(Debug)]
 pub enum HttpClientError {
     NotFound,
+    RateLimited,
     RequestFailed,
     ParseError,
 }
@@ -28,6 +29,7 @@ impl std::fmt::Display for HttpClientError {
             HttpClientError::NotFound => write!(f, "resource not found"),
             HttpClientError::RequestFailed => write!(f, "request failed"),
             HttpClientError::ParseError => write!(f, "failed to parse response"),
+            HttpClientError::RateLimited => write!(f, "rate limited by the server"),
         }
     }
 }
