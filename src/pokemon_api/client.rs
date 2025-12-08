@@ -6,14 +6,20 @@ use async_trait::async_trait;
 use reqwest::StatusCode;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+use utoipa::ToSchema;
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct Pokemon {
+    /// Pokemon ID
     pub id: i32,
+    /// Pokemon name
     pub name: String,
+    /// Pokemon habitat (e.g., cave, forest)
     pub habitat: Option<String>,
+    /// Whether the Pokemon is legendary
     #[serde(rename = "isLegendary")]
     pub is_legendary: bool,
+    /// Pokemon description
     pub description: Option<String>,
 }
 

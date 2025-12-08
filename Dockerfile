@@ -24,8 +24,6 @@ RUN set -eux; \
 # Copy sources early (no dependency optimization for simplicity & determinism)
 COPY Cargo.lock Cargo.toml ./
 COPY src ./src
-COPY tests ./tests
-COPY schemas ./schemas
 
 # Build binary for resolved target triple and strip
 RUN set -eux; TARGET_TRIPLE=$(cat /tmp/target_triple); \

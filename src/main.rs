@@ -2,10 +2,12 @@ use axum::{
     extract::{Path, State},
     http::StatusCode,
     response::{IntoResponse, Json, Response},
-    routing::get,
-    Router,
 };
 use std::{process::exit, sync::Arc};
+use utoipa::OpenApi;
+use utoipa_axum::router::OpenApiRouter;
+use utoipa_axum::routes;
+use utoipa_swagger_ui::{Config, SwaggerUi};
 
 mod config;
 mod constants;
@@ -19,6 +21,26 @@ use pokemon_api::client::{
 use translator::client::{FunTranslator, Translator};
 
 use crate::{config::ConfigDescriptor, http::client::HttpClientError};
+
+#[derive(OpenApi)]
+#[openapi(
+    paths(
+        get_pokemon,
+        get_pokemon_translation
+    ),
+    components(
+        schemas(Pokemon)
+    ),
+    tags(
+        (name = "pokemon", description = "Pokemon API endpoints")
+    ),
+    info(
+        title = "Pokemon API",
+        version = "0.1.0",
+        description = "API for fetching Pokemon information and translations"
+    )
+)]
+struct ApiDoc;
 
 #[derive(Clone)]
 struct AppState {
@@ -88,15 +110,38 @@ async fn main() -> anyhow::Result<()> {
         pokemon_api,
         fun_translator,
     };
-    let app = Router::new()
-        .route("/pokemon/:name", get(get_pokemon))
-        .route("/pokemon/:name/translation/", get(get_pokemon_translation))
+
+    let (router, api) = OpenApiRouter::with_openapi(ApiDoc::openapi())
+        .routes(routes!(get_pokemon))
+        .routes(routes!(get_pokemon_translation))
+        .split_for_parts();
+
+    let app = router
+        .merge(
+            SwaggerUi::new("/swagger-ui")
+                .config(Config::default().validator_url("none"))
+                .url("/api-docs/openapi.json", api.clone()),
+        )
         .with_state(state);
+
     let listener = tokio::net::TcpListener::bind(format!("0.0.0.0:{}", config.port)).await?;
-    axum::serve(listener, app).await.unwrap();
+    axum::serve(listener, app).await?;
     Ok(())
 }
 
+#[utoipa::path(
+    get,
+    path = "/pokemon/{name}",
+    tag = "pokemon",
+    params(
+        ("name" = String, Path, description = "Pokemon name")
+    ),
+    responses(
+        (status = 200, description = "Pokemon found", body = Pokemon),
+        (status = 404, description = "Pokemon not found"),
+        (status = 500, description = "Internal server error")
+    )
+)]
 async fn get_pokemon(
     State(state): State<AppState>,
     Path(name): Path<String>,
@@ -109,6 +154,19 @@ async fn get_pokemon(
         .unwrap_or_else(Into::into)
 }
 
+#[utoipa::path(
+    get,
+    path = "/pokemon/{name}/translation/",
+    tag = "pokemon",
+    params(
+        ("name" = String, Path, description = "Pokemon name")
+    ),
+    responses(
+        (status = 200, description = "Translated Pokemon description", body = String),
+        (status = 404, description = "Pokemon not found"),
+        (status = 500, description = "Internal server error")
+    )
+)]
 async fn get_pokemon_translation(
     State(state): State<AppState>,
     Path(name): Path<String>,

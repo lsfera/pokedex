@@ -14,6 +14,23 @@ The application can be configured via command-line arguments or environment vari
 | **fun translations host** | hostname for [fun translations API](https://funtranslations.com/api/) | `--fun-translations-host` | `FUN_TRANSLATIONS_HOST` | `api.funtranslations.com` | x |
 | **fun translations secure** | use HTTPS for [fun translations API](https://funtranslations.com/api/) communication | `--fun-translations-secure` | `FUN_TRANSLATIONS_SECURE` | `true` | | 
 
+## api documentation
+
+The API provides interactive documentation via Swagger UI and exposes an OpenAPI 3.0 specification.
+
+**endpoints:**
+- `GET /pokemon/{name}` - fetch Pokemon information
+- `GET /pokemon/{name}/translation/` - fetch translated Pokemon description
+- `GET /api-docs/openapi.json` - OpenAPI specification (JSON)
+- `GET /swagger-ui` - Interactive Swagger UI documentation
+
+### swagger ui
+
+The application includes built-in Swagger UI for interactive API exploration:
+- Access at: `http://localhost:5000/swagger-ui`
+- Automatically loads the OpenAPI spec from `/api-docs/openapi.json`
+- Test API endpoints directly from your browser
+
 ### examples
 
 ```bash
@@ -43,6 +60,17 @@ docker run --rm -p 5000:5000 pokemon-rest-api:dev
 I changed the route from `/pokemon/translated/:name` to `/pokemon/:name/translation/` because:
 * **resource hierarchy**: the translation is a subordinate resource of `/pokemon/:name` and the URL structure should reflect this relationship.
 * **content representation**: the endpoint returns `text/plain` instead of `application/json`; since it's just a description, there's no need to waste CPU time serializing and deserializing JSON when plain text suffices.
+
+For demo purpose I provided swagger-ui alongside the code. Before moving to production it would be better to externalize that concern to a different component(developer portal/sidecar).
+
+I identified a few cross cutting concerns that are bettere suited to infrastructure components:
+* **Ingress**: our Api would be served as a load balanced workload externally accessible through a gateway that should provide mTls termination;
+* **Egress** traffic control: components such Istio can provide virtual services and manage:  
+  *  mTls upgrade;
+  *  retry policies/circuit breaker;
+  *  reverse proxy capabilities;</ul>
+with declarative policies.
+
 
 Some TODOs:
 * Add OpenTelemetry instrumentation

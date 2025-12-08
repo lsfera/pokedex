@@ -18,6 +18,9 @@ fmt = "0.1.0"
 thiserror = "2"
 regex = "1.12.2"
 once_cell = "1"
+utoipa = { version = "5", features = ["axum_extras"] }
+utoipa-swagger-ui = { version = "9", features = ["axum", "reqwest"] }
+utoipa-axum = "0.2"
 
 [dev-dependencies]
 jsonschema = "0.37"
