@@ -19,10 +19,32 @@ The application can be configured via command-line arguments or environment vari
 The API provides interactive documentation via Swagger UI and exposes an OpenAPI 3.0 specification.
 
 **endpoints:**
-- `GET /pokemon/{name}` - fetch Pokemon information
+- `GET /pokemon/{name}` - fetch Pokemon information with language negotiation support
 - `GET /pokemon/{name}/translation/` - fetch translated Pokemon description
 - `GET /api-docs/openapi.json` - OpenAPI specification (JSON)
 - `GET /swagger-ui` - Interactive Swagger UI documentation
+
+### language negotiation
+
+The `/pokemon/{name}` endpoint supports HTTP content negotiation via the `Accept-Language` header:
+
+```bash
+# Request Pokemon description in Spanish
+curl -H "Accept-Language: es" http://localhost:5000/pokemon/pikachu
+
+# Request with multiple language preferences (quality values supported)
+curl -H "Accept-Language: es;q=0.9,en;q=0.8" http://localhost:5000/pokemon/pikachu
+
+# Accept any available language as fallback
+curl -H "Accept-Language: fr,*" http://localhost:5000/pokemon/pikachu
+```
+
+**Behavior:**
+- Returns `406 Not Acceptable` if requested language is not available and no wildcard (`*`) is provided
+- Returns `Content-Language` header indicating the language of the description
+- Falls back to English (`en`) if available
+- Falls back to first available language if wildcard is present
+- Default behavior (no header): accepts any available language
 
 ### swagger ui
 
@@ -71,6 +93,14 @@ I identified a few cross cutting concerns that are bettere suited to infrastruct
   *  reverse proxy capabilities;</ul>
 with declarative policies.
 
+**Implemented features:**
+* ✅ OpenAPI 3.0 specification with automatic schema generation via `utoipa`
+* ✅ Built-in Swagger UI for API documentation and testing
+* ✅ HTTP content negotiation via `Accept-Language` header
+* ✅ `Content-Language` header in responses
+* ✅ Proper HTTP status codes (406 Not Acceptable for unsupported languages)
+* ✅ Comprehensive unit test coverage (15 tests) plus ignored integration test against real API
+* ✅ Docker multi-service setup with nginx and Swagger UI
 
 Some TODOs:
 * Add OpenTelemetry instrumentation

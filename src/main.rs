@@ -1,8 +1,10 @@
+use accept_language::parse;
 use axum::{
     extract::{Path, State},
     http::StatusCode,
-    response::{IntoResponse, Json, Response},
+    response::{AppendHeaders, IntoResponse, Json, Response},
 };
+use hyper::{header::CONTENT_LANGUAGE, HeaderMap};
 use std::{process::exit, sync::Arc};
 use utoipa::OpenApi;
 use utoipa_axum::router::OpenApiRouter;
@@ -20,7 +22,25 @@ use pokemon_api::client::{
 };
 use translator::client::{FunTranslator, Translator};
 
-use crate::{config::ConfigDescriptor, http::client::HttpClientError};
+use crate::{config::ConfigDescriptor, constants::DEFAULT_LANGUAGE, http::client::HttpClientError};
+
+trait AcceptLanguageExt {
+    fn parse_accept_language(&self) -> (Vec<String>, bool);
+}
+
+impl AcceptLanguageExt for HeaderMap {
+    fn parse_accept_language(&self) -> (Vec<String>, bool) {
+        self.get("accept-language")
+            .and_then(|h| h.to_str().ok())
+            .map(|header_value| {
+                let langs = parse(header_value);
+                let has_wildcard: bool = langs.iter().any(|l| l == "*");
+                let filtered_langs: Vec<String> = langs.into_iter().filter(|l| l != "*").collect();
+                (filtered_langs, has_wildcard)
+            })
+            .unwrap_or_else(|| (vec![], true))
+    }
+}
 
 #[derive(OpenApi)]
 #[openapi(
@@ -49,7 +69,7 @@ struct AppState {
 }
 
 enum HttpResponse<T> {
-    Success(T),
+    Success(String, T),
     NotFound,
     InternalError,
 }
@@ -59,9 +79,12 @@ struct JsonResponse<T>(T);
 impl<T: serde::Serialize> IntoResponse for HttpResponse<JsonResponse<T>> {
     fn into_response(self) -> Response {
         match self {
-            HttpResponse::Success(JsonResponse(data)) => {
-                (StatusCode::OK, Json(data)).into_response()
-            }
+            HttpResponse::Success(lang, JsonResponse(data)) => (
+                StatusCode::OK,
+                AppendHeaders([(CONTENT_LANGUAGE, lang)]),
+                Json(data),
+            )
+                .into_response(),
             HttpResponse::NotFound => StatusCode::NOT_FOUND.into_response(),
             HttpResponse::InternalError => StatusCode::INTERNAL_SERVER_ERROR.into_response(),
         }
@@ -71,7 +94,12 @@ impl<T: serde::Serialize> IntoResponse for HttpResponse<JsonResponse<T>> {
 impl IntoResponse for HttpResponse<String> {
     fn into_response(self) -> Response {
         match self {
-            HttpResponse::Success(data) => (StatusCode::OK, data).into_response(),
+            HttpResponse::Success(lang, data) => (
+                StatusCode::OK,
+                AppendHeaders([(CONTENT_LANGUAGE, lang)]),
+                data,
+            )
+                .into_response(),
             HttpResponse::NotFound => StatusCode::NOT_FOUND.into_response(),
             HttpResponse::InternalError => StatusCode::INTERNAL_SERVER_ERROR.into_response(),
         }
@@ -134,10 +162,13 @@ async fn main() -> anyhow::Result<()> {
     path = "/pokemon/{name}",
     tag = "pokemon",
     params(
-        ("name" = String, Path, description = "Pokemon name")
+        ("name" = String, Path, description = "Pokemon name"),
+        ("accept-language" = Option<String>, Header, description = "Preferred language(s) for Pokemon description (e.g., 'en', 'es', 'fr'). Supports multiple languages with quality values (e.g., 'es;q=0.9,en;q=0.8'). Use '*' to accept any available language.")
     ),
     responses(
-        (status = 200, description = "Pokemon found", body = Pokemon),
+        (status = 200, description = "Pokemon found", body = Pokemon, headers(
+            ("Content-Language" = String, description = "Language of the returned Pokemon description")
+        )),
         (status = 404, description = "Pokemon not found"),
         (status = 500, description = "Internal server error")
     )
@@ -145,12 +176,14 @@ async fn main() -> anyhow::Result<()> {
 async fn get_pokemon(
     State(state): State<AppState>,
     Path(name): Path<String>,
+    headers: HeaderMap,
 ) -> HttpResponse<JsonResponse<Pokemon>> {
+    let (languages, has_wildcard) = headers.parse_accept_language();
     state
         .pokemon_api
-        .get_pokemon(&name)
+        .get_pokemon(&name, &languages, has_wildcard)
         .await
-        .map(|p| HttpResponse::Success(JsonResponse(p)))
+        .map(|(lang, p)| HttpResponse::Success(lang, JsonResponse(p)))
         .unwrap_or_else(Into::into)
 }
 
@@ -162,7 +195,9 @@ async fn get_pokemon(
         ("name" = String, Path, description = "Pokemon name")
     ),
     responses(
-        (status = 200, description = "Translated Pokemon description", body = String),
+        (status = 200, description = "Translated Pokemon description", body = String, headers(
+            ("Content-Language" = String, description = "Language of the returned translated description")
+        )),
         (status = 404, description = "Pokemon not found"),
         (status = 500, description = "Internal server error")
     )
@@ -173,24 +208,24 @@ async fn get_pokemon_translation(
 ) -> HttpResponse<String> {
     match state
         .pokemon_api
-        .get_pokemon(&name)
+        .get_pokemon(&name, &[DEFAULT_LANGUAGE.to_string()], false)
         .await
-        .and_then(|p| {
+        .and_then(|(lang, p)| {
             let translator = p.get_translator();
             p.description
-                .map(|d| (d, translator))
+                .map(|d| (lang, d, translator))
                 .ok_or(HttpClientError::NotFound)
         })
-        .map(|(d, t)| async move {
+        .map(|(lang, d, t)| async move {
             state
                 .fun_translator
                 .translate(&d, t)
                 .await
-                .map(|tr| tr.contents.translated)
+                .map(|tr| (lang, tr.contents.translated))
         }) {
         Ok(f) => f
             .await
-            .map(HttpResponse::Success)
+            .map(|(lang, text)| HttpResponse::Success(lang, text))
             .unwrap_or_else(Into::into),
         Err(e) => e.into(),
     }

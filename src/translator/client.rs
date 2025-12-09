@@ -41,7 +41,9 @@ impl Translator for FunTranslator {
         self.client
             .get(format!(
                 "{}/{}?text={}",
-                self.base_url, translator_type, text
+                self.base_url,
+                translator_type,
+                urlencoding::encode(text)
             ))
             .send()
             .await
@@ -183,5 +185,25 @@ mod tests {
 
         assert!(matches!(result, Err(HttpClientError::ParseError)));
         mock.assert_async().await;
+    }
+
+    #[tokio::test]
+    #[ignore] // Run with: cargo test -- --ignored test_translate_with_real_api
+    async fn test_translate_with_real_api_shakespeare() {
+        let translator = FunTranslator::new(
+            reqwest::Client::new(),
+            "https://api.funtranslations.com/translate".to_string(),
+        );
+
+        let result = translator
+            .translate("Hello, how are you?", TranslatorType::Shakespeare)
+            .await;
+
+        // This test requires internet connectivity to the real API
+        assert!(result.is_ok());
+        let response = result.unwrap();
+        assert!(!response.contents.translated.is_empty());
+        // Shakespeare translation should differ from original
+        assert_ne!(response.contents.translated, "Hello, how are you?");
     }
 }

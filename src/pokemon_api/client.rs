@@ -33,7 +33,7 @@ impl Pokemon {
     }
 }
 
-pub type PokemonResult = Result<Pokemon, HttpClientError>;
+pub type PokemonResult = Result<(String, Pokemon), HttpClientError>;
 
 #[derive(Debug, Deserialize)]
 pub struct BasePokemonResponse {
@@ -72,7 +72,12 @@ pub struct LanguageReference {
 
 #[async_trait]
 pub trait PokemonApi: Send + Sync {
-    async fn get_pokemon(&self, name: &str) -> PokemonResult;
+    async fn get_pokemon(
+        &self,
+        name: &str,
+        languages: &[String],
+        has_wildcard: bool,
+    ) -> PokemonResult;
 }
 
 #[async_trait]
@@ -138,7 +143,12 @@ impl PokeApiClient {
 
 #[async_trait]
 impl PokemonApi for PokeApiClient {
-    async fn get_pokemon(&self, name: &str) -> PokemonResult {
+    async fn get_pokemon(
+        &self,
+        name: &str,
+        languages: &[String],
+        has_wildcard: bool,
+    ) -> PokemonResult {
         let BasePokemonResponse { id, name, species } = self.client.get_base_pokemon(name).await?;
         let SpeciesResponse {
             habitat,
@@ -149,20 +159,34 @@ impl PokemonApi for PokeApiClient {
             .iter()
             .map(|entry| (entry.language.name.as_str(), entry.flavor_text.as_str()))
             .collect();
-        let description = flavor_texts
-            .get(DEFAULT_LANGUAGE)
-            .map(|text| text.to_string());
-        match flavor_text_entries.first() {
+        let description = languages
+            .iter()
+            .find_map(|lang| flavor_texts.get_key_value(lang.as_str()))
+            .or_else(|| flavor_texts.get_key_value(DEFAULT_LANGUAGE))
+            .map(|(lang, text)| (lang.to_string(), text.to_string()));
+        let not_acceptable = matches!((&description, has_wildcard), (None, false));
+        match (flavor_text_entries.first(), not_acceptable) {
             // descriptions are empty
-            None => Err(HttpClientError::NotFound),
-            // no description found from requested languages
-            Some(first) => Ok(Pokemon {
-                id,
-                name,
-                habitat: habitat.map(|h| h.name),
-                is_legendary,
-                description: description.or_else(|| Some(first.flavor_text.to_string())),
-            }),
+            (None, _) => Err(HttpClientError::NotFound),
+            // no description found from requested languages and no wildcard to fall back on
+            (_, true) => Err(HttpClientError::NotAcceptable),
+            (Some(first), false) => {
+                let (lang, desc) = if let Some((l, t)) = description {
+                    (l, t)
+                } else {
+                    (first.language.name.clone(), first.flavor_text.clone())
+                };
+                Ok((
+                    lang,
+                    Pokemon {
+                        id,
+                        name,
+                        habitat: habitat.map(|h| h.name),
+                        is_legendary,
+                        description: Some(desc),
+                    },
+                ))
+            }
         }
     }
 }
@@ -252,7 +276,10 @@ mod tests {
             },
         ]);
 
-        let pokemon = client.get_pokemon("pikachu").await.unwrap();
+        let (_lang, pokemon) = client
+            .get_pokemon("pikachu", &["en".to_string()], false)
+            .await
+            .unwrap();
 
         assert_eq!(pokemon.name, "pikachu");
         assert_eq!(pokemon.habitat.as_deref(), Some("forest"));
@@ -269,8 +296,14 @@ mod tests {
             },
         }]);
 
-        let pokemon = client.get_pokemon("pikachu").await.unwrap();
+        // Should return NotAcceptable if no wildcard and language not present
+        let result = client
+            .get_pokemon("pikachu", &["en".to_string()], false)
+            .await;
+        assert!(matches!(result, Err(HttpClientError::NotAcceptable)));
 
+        // Should fall back to first if wildcard is allowed
+        let (_lang, pokemon) = client.get_pokemon("pikachu", &[], true).await.unwrap();
         assert_eq!(
             pokemon.description.as_deref(),
             Some("Descripcion por defecto.")
@@ -281,9 +314,27 @@ mod tests {
     async fn returns_not_found_when_no_descriptions() {
         let client = make_client(vec![]);
 
-        let result = client.get_pokemon("pikachu").await;
+        let result = client
+            .get_pokemon("pikachu", &["en".to_string()], false)
+            .await;
 
         assert!(matches!(result, Err(HttpClientError::NotFound)));
+    }
+
+    #[tokio::test]
+    async fn returns_not_acceptable_when_language_not_available_and_no_wildcard() {
+        let client = make_client(vec![FlavorTextEntry {
+            flavor_text: "Beschreibung auf Deutsch.".to_string(),
+            language: LanguageReference {
+                name: "de".to_string(),
+            },
+        }]);
+
+        let result = client
+            .get_pokemon("pikachu", &["fr".to_string()], false)
+            .await;
+
+        assert!(matches!(result, Err(HttpClientError::NotAcceptable)));
     }
 
     mod get_translator_tests {
