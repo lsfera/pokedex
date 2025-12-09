@@ -1,0 +1,29 @@
+name: Build multiplatform docker image
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - 'v[0-9]+.[0-9]+.[0-9]+'
+  workflow_call:
+
+jobs:
+  build-application:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build Docker container and push it to GitHub Packages
+        uses: lojoh/build-and-push-multi-platform-docker-images-action@2.0
+        with:
+          docker-args: |
+            ReleaseVersion=${{ steps.version.outputs.version }}
+          docker-context: .
+          docker-file: Dockerfile
+          docker-registry: ghcr.io/lsfera
+          github-token: ${{ secrets.PAT }}
+          image-name: multi-platform-pokedex
+          tag: 1.2.3
+          platform: linux/arm64,linux/amd64
