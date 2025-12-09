@@ -1,0 +1,7 @@
+.github/**
+docs/**
+src/.vscode/**
+src/.vs/**
+README.*
+.gitignore
+.gitattributes
