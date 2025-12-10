@@ -1,6 +1,6 @@
 # Pokémon ReST API
 
-A rust web service built with [axum](https://github.com/tokio-rs/axum) that enriches pokémon data from [PokéAPI](https://pokeapi.co/) by applying fun translations based on pokémon characteristics.
+A Rust web service built with [axum](https://github.com/tokio-rs/axum) that enriches Pokémon data from [PokéAPI](https://pokeapi.co/) by applying fun translations based on Pokémon characteristics.
 
 ## configuration
 
@@ -201,9 +201,9 @@ I changed the route from `/pokemon/translated/:name` to `/pokemon/:name/translat
 * **resource hierarchy**: the translation is a subordinate resource of `/pokemon/:name` and the URL structure should reflect this relationship.
 * **content representation**: the endpoint returns `text/plain` instead of `application/json`; since it's just a description, there's no need to waste CPU time serializing and deserializing JSON when plain text suffices.
 
-For demo purpose I provided swagger-ui alongside the code. Before moving to production it would be better to externalize that concern to a different component(developer portal/sidecar).
+For demo purposes I provided swagger-ui alongside the code. Before moving to production it would be better to externalize that concern to a different component (developer portal/sidecar).
 
-I identified a few cross cutting concerns that are bettere suited to infrastructure components:
+The following infrastructure components might provide some common cross cutting concerns:
 * **Ingress**: our Api would be served as a load balanced workload externally accessible through a gateway that should provide mTls termination;
 * **Egress** traffic control: components such Istio can provide virtual services and manage:  
   *  mTls upgrade;
