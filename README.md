@@ -150,24 +150,10 @@ I identified a few cross cutting concerns that are bettere suited to infrastruct
 * **Egress** traffic control: components such Istio can provide virtual services and manage:  
   *  mTls upgrade;
   *  retry policies/circuit breaker;
-  *  reverse proxy capabilities;</ul>
+  *  reverse proxy with **caching** integration capabilities - see [Redis](https://redis.io/);</ul>
 with declarative policies.
 
-**Implemented features:**
-* ✅ OpenAPI 3.0 specification with automatic schema generation via `utoipa`
-* ✅ Built-in Swagger UI for API documentation and testing
-* ✅ HTTP content negotiation via `Accept-Language` header
-* ✅ `Content-Language` header in responses
-* ✅ Proper HTTP status codes (406 Not Acceptable for unsupported languages)
-* ✅ Comprehensive unit test coverage (15 tests) plus ignored integration test against real API
-* ✅ Docker multi-service setup with nginx and Swagger UI
-* ✅ Prometheus metrics with 8 tracked metrics
-* ✅ Structured logging with tracing instrumentation
-* ✅ Health check endpoint
 
-Some TODOs:
-* Add OpenTelemetry instrumentation for distributed tracing
-* Add a dashboard with dedicated metrics (p99/p95 by route)
 
 ## License
 
