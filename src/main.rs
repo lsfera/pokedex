@@ -46,13 +46,15 @@ impl AcceptLanguageExt for HeaderMap {
 #[openapi(
     paths(
         get_pokemon,
-        get_pokemon_translation
+        get_pokemon_translation,
+        health
     ),
     components(
         schemas(Pokemon)
     ),
     tags(
-        (name = "pokemon", description = "Pokemon API endpoints")
+        (name = "pokemon", description = "Pokemon API endpoints"),
+        (name = "system", description = "Service health endpoints")
     ),
     info(
         title = "Pokemon API",
@@ -142,6 +144,7 @@ async fn main() -> anyhow::Result<()> {
     let (router, api) = OpenApiRouter::with_openapi(ApiDoc::openapi())
         .routes(routes!(get_pokemon))
         .routes(routes!(get_pokemon_translation))
+        .routes(routes!(health))
         .split_for_parts();
 
     let app = router
@@ -229,4 +232,14 @@ async fn get_pokemon_translation(
             .unwrap_or_else(Into::into),
         Err(e) => e.into(),
     }
+}
+
+#[utoipa::path(
+    get,
+    path = "/health",
+    tag = "system",
+    responses((status = 200, description = "Service is healthy"))
+)]
+async fn health() -> impl IntoResponse {
+    StatusCode::OK
 }

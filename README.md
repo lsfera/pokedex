@@ -21,6 +21,7 @@ The API provides interactive documentation via Swagger UI and exposes an OpenAPI
 **endpoints:**
 - `GET /pokemon/{name}` - fetch Pokemon information with language negotiation support
 - `GET /pokemon/{name}/translation/` - fetch translated Pokemon description
+- `GET /health` - health check (returns 200 OK)
 - `GET /api-docs/openapi.json` - OpenAPI specification (JSON)
 - `GET /swagger-ui` - Interactive Swagger UI documentation
 
