@@ -282,6 +282,7 @@ async fn main() -> anyhow::Result<()> {
     get,
     path = "/pokemon/{name}",
     tag = "pokemon",
+    description = "Fetches Pokemon information with language negotiation",
     params(
         ("name" = String, Path, description = "Pokemon name"),
         ("accept-language" = Option<String>, Header, description = "Preferred language(s) for Pokemon description (e.g., 'en', 'es', 'fr'). Supports multiple languages with quality values (e.g., 'es;q=0.9,en;q=0.8'). Use '*' to accept any available language.")
@@ -371,6 +372,7 @@ async fn get_pokemon(
     get,
     path = "/pokemon/{name}/translation/",
     tag = "pokemon",
+    description = "Fetches and translates a Pokemon's description",
     params(
         ("name" = String, Path, description = "Pokemon name")
     ),
@@ -466,6 +468,7 @@ async fn get_pokemon_translation(
 #[utoipa::path(
     get,
     path = "/health",
+    description = "Health check endpoint",
     tag = "system",
     responses((status = 200, description = "Service is healthy"))
 )]
@@ -498,6 +501,7 @@ async fn health() -> impl IntoResponse {
 #[utoipa::path(
     get,
     path = "/metrics",
+    description = "Prometheus metrics endpoint",
     tag = "system",
     responses((status = 200, description = "Prometheus format metrics"))
 )]
