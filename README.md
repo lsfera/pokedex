@@ -126,6 +126,34 @@ cargo run -- --port 8080 --pokeapi-host pokeapi.co --pokeapi-secure true
 PORT=5000 cargo run -- --port 8080  # server will use port 8080
 ```
 
+## testing
+
+Run unit tests:
+```bash
+# Run all unit tests
+cargo test --lib
+
+# Run tests with output
+cargo test --lib -- --nocapture
+
+# Run specific test
+cargo test --lib pokemon_requests_found
+```
+
+Run integration tests:
+```bash
+# Run all integration tests (requires network access to real APIs)
+cargo test --test '*' -- --include-ignored
+
+# Run specific integration test
+cargo test --test integration_test -- --include-ignored
+```
+
+Run all tests (unit + integration):
+```bash
+cargo test -- --include-ignored
+```
+
 ## docker build
 
 ### local single-arch build
