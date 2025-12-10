@@ -39,12 +39,8 @@ impl Translator for FunTranslator {
         translator_type: TranslatorType,
     ) -> Result<TranslationResponse, HttpClientError> {
         self.client
-            .get(format!(
-                "{}/{}?text={}",
-                self.base_url,
-                translator_type,
-                urlencoding::encode(text)
-            ))
+            .post(format!("{}/{}.json", self.base_url, translator_type,))
+            .form(&[("text", text)])
             .send()
             .await
             .map_err(|_| HttpClientError::RequestFailed)
@@ -68,10 +64,12 @@ mod tests {
     async fn translates_text_successfully_with_shakespeare() {
         let mut server = mockito::Server::new_async().await;
         let mock = server
-            .mock("GET", "/shakespeare?text=Hello")
+            .mock("POST", "/shakespeare.json")
+            .match_header("content-type", "application/x-www-form-urlencoded")
+            .match_body("text=Hello")
             .with_status(200)
             .with_header("content-type", "application/json")
-            .with_body(r#"{"contents": {"translated": "Hark, Hello"}}"#)
+            .with_body(r#"{"success":{"total":1},"contents":{"translation":"shakespeare","text":"Hello","translated":"Hark, Hello"}}"#)
             .create_async()
             .await;
 
@@ -91,10 +89,12 @@ mod tests {
     async fn translates_text_successfully_with_yoda() {
         let mut server = mockito::Server::new_async().await;
         let mock = server
-            .mock("GET", "/yoda?text=Hello")
+            .mock("POST", "/yoda.json")
+            .match_header("content-type", "application/x-www-form-urlencoded")
+            .match_body("text=Hello")
             .with_status(200)
             .with_header("content-type", "application/json")
-            .with_body(r#"{"contents": {"translated": "Hello, you say must"}}"#)
+            .with_body(r#"{"success":{"total":1},"contents":{"translation":"yoda","text":"Hello","translated":"Hello, you say must"}}"#)
             .create_async()
             .await;
 
@@ -112,7 +112,9 @@ mod tests {
     async fn returns_not_found_on_404() {
         let mut server = mockito::Server::new_async().await;
         let mock = server
-            .mock("GET", "/shakespeare?text=Unknown")
+            .mock("POST", "/shakespeare.json")
+            .match_header("content-type", "application/x-www-form-urlencoded")
+            .match_body("text=Unknown")
             .with_status(404)
             .create_async()
             .await;
@@ -131,7 +133,9 @@ mod tests {
     async fn returns_rate_limited_on_429() {
         let mut server = mockito::Server::new_async().await;
         let mock = server
-            .mock("GET", "/shakespeare?text=Unknown")
+            .mock("POST", "/shakespeare.json")
+            .match_header("content-type", "application/x-www-form-urlencoded")
+            .match_body("text=Unknown")
             .with_status(429)
             .create_async()
             .await;
@@ -150,7 +154,9 @@ mod tests {
     async fn returns_parse_error_on_invalid_json() {
         let mut server = mockito::Server::new_async().await;
         let mock = server
-            .mock("GET", "/shakespeare?text=Hello")
+            .mock("POST", "/shakespeare.json")
+            .match_header("content-type", "application/x-www-form-urlencoded")
+            .match_body("text=Hello")
             .with_status(200)
             .with_header("content-type", "application/json")
             .with_body("invalid json")
@@ -171,7 +177,9 @@ mod tests {
     async fn returns_parse_error_on_server_error() {
         let mut server = mockito::Server::new_async().await;
         let mock = server
-            .mock("GET", "/shakespeare?text=Hello")
+            .mock("POST", "/shakespeare.json")
+            .match_header("content-type", "application/x-www-form-urlencoded")
+            .match_body("text=Hello")
             .with_status(500)
             .with_body("Internal Server Error")
             .create_async()
