@@ -37,11 +37,11 @@ use axum::{
 };
 use hyper::{header::CONTENT_LANGUAGE, HeaderMap};
 use std::{process::exit, sync::Arc};
+use tracing::{debug, info, warn};
 use utoipa::OpenApi;
 use utoipa_axum::router::OpenApiRouter;
 use utoipa_axum::routes;
 use utoipa_swagger_ui::{Config, SwaggerUi};
-use tracing::{info, debug, warn};
 
 mod config;
 mod constants;
@@ -206,11 +206,11 @@ async fn main() -> anyhow::Result<()> {
                 .add_directive(tracing_subscriber::filter::LevelFilter::INFO.into()),
         )
         .init();
-    
+
     info!("Starting Pokemon API server");
-    
+
     metrics::init();
-    
+
     let config = match config::AppConfig::load() {
         Ok(cfg) => cfg,
         Err(e) => {
@@ -303,15 +303,15 @@ async fn get_pokemon(
 ) -> HttpResponse<JsonResponse<Pokemon>> {
     let span = tracing::info_span!("get_pokemon", pokemon_name = %name);
     let _guard = span.enter();
-    
+
     if name.trim().is_empty() {
         warn!("Empty pokemon name requested");
         return HttpResponse::NotFound;
     }
-    
+
     debug!("Fetching pokemon: {}", name);
     metrics::POKEMON_REQUESTS_TOTAL.inc();
-    
+
     let (languages, has_wildcard) = headers.parse_accept_language();
     let result = state
         .pokemon_api
@@ -319,11 +319,15 @@ async fn get_pokemon(
         .await
         .map(|(lang, p)| HttpResponse::Success(lang, JsonResponse(p)))
         .unwrap_or_else(Into::into);
-    
+
     match &result {
         HttpResponse::Success(lang, _) => {
             metrics::POKEMON_REQUESTS_FOUND.inc();
-            info!(pokemon = name, language = lang, "Successfully fetched pokemon");
+            info!(
+                pokemon = name,
+                language = lang,
+                "Successfully fetched pokemon"
+            );
         }
         HttpResponse::NotFound => {
             metrics::POKEMON_REQUESTS_NOT_FOUND.inc();
@@ -335,7 +339,7 @@ async fn get_pokemon(
         }
         _ => {}
     }
-    
+
     result
 }
 
@@ -386,15 +390,15 @@ async fn get_pokemon_translation(
 ) -> HttpResponse<String> {
     let span = tracing::info_span!("get_pokemon_translation", pokemon_name = %name);
     let _guard = span.enter();
-    
+
     if name.trim().is_empty() {
         warn!("Empty pokemon name requested for translation");
         return HttpResponse::NotFound;
     }
-    
+
     debug!("Translating pokemon description for: {}", name);
     metrics::TRANSLATIONS_TOTAL.inc();
-    
+
     let response = match state
         .pokemon_api
         .get_pokemon(&name, &[DEFAULT_LANGUAGE.to_string()], false)
@@ -406,11 +410,7 @@ async fn get_pokemon_translation(
                 .ok_or(HttpClientError::NotFound)
         })
         .map(|(lang, d, t)| async move {
-            match state
-                .fun_translator
-                .translate(&d, t)
-                .await
-            {
+            match state.fun_translator.translate(&d, t).await {
                 Ok(tr) => Ok((lang, tr.contents.translated)),
                 Err(HttpClientError::RateLimited) => {
                     metrics::RATE_LIMITED_ERRORS.inc();
@@ -425,11 +425,14 @@ async fn get_pokemon_translation(
             .unwrap_or_else(Into::into),
         Err(e) => e.into(),
     };
-    
+
     match &response {
         HttpResponse::Success(_, _) => {
             metrics::TRANSLATIONS_SUCCEEDED.inc();
-            info!(pokemon = name, "Successfully translated pokemon description");
+            info!(
+                pokemon = name,
+                "Successfully translated pokemon description"
+            );
         }
         HttpResponse::NotFound => {
             metrics::TRANSLATIONS_FAILED.inc();
@@ -445,7 +448,7 @@ async fn get_pokemon_translation(
             warn!(pokemon = name, "Translation failed");
         }
     }
-    
+
     response
 }
 

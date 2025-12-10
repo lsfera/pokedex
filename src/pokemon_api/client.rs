@@ -28,8 +28,8 @@ use async_trait::async_trait;
 use reqwest::StatusCode;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use utoipa::ToSchema;
 use tracing::{debug, instrument};
+use utoipa::ToSchema;
 
 /// A Pokémon with enriched data including descriptions and characteristics.
 ///
@@ -241,7 +241,7 @@ impl PokemonApi for PokeApiClient {
     ) -> PokemonResult {
         debug!("Fetching base pokemon data");
         let BasePokemonResponse { id, name, species } = self.client.get_base_pokemon(name).await?;
-        
+
         debug!(pokemon_id = id, species_url = %species.url, "Fetching species data");
         let SpeciesResponse {
             habitat,
@@ -252,7 +252,7 @@ impl PokemonApi for PokeApiClient {
             available_languages = ?flavor_text_entries.iter().map(|e| &e.language.name).collect::<Vec<_>>(),
             "Processing language descriptions"
         );
-        
+
         let flavor_texts: HashMap<&str, &str> = flavor_text_entries
             .iter()
             .map(|entry| (entry.language.name.as_str(), entry.flavor_text.as_str()))
