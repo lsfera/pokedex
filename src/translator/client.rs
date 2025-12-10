@@ -98,6 +98,7 @@ impl Translator for FunTranslator {
             .map_err(|_| HttpClientError::RequestFailed)
             .and_then(|r| match r.status() {
                 StatusCode::NOT_FOUND => Err(HttpClientError::NotFound),
+                StatusCode::SERVICE_UNAVAILABLE => Err(HttpClientError::ServiceUnavailable),
                 StatusCode::TOO_MANY_REQUESTS => Err(HttpClientError::RateLimited),
                 // NOTE: by default redirects followed automatically by reqwest::Client: https://docs.rs/reqwest/latest/reqwest/#redirect-policies
                 _ => Ok(r),
@@ -199,6 +200,27 @@ mod tests {
             .await;
 
         assert!(matches!(result, Err(HttpClientError::RateLimited)));
+        mock.assert_async().await;
+    }
+
+    #[tokio::test]
+    async fn returns_service_unavailable_on_503() {
+        let mut server = mockito::Server::new_async().await;
+        let mock = server
+            .mock("POST", "/shakespeare.json")
+            .match_header("content-type", "application/x-www-form-urlencoded")
+            .match_body("text=Hello")
+            .with_status(503)
+            .create_async()
+            .await;
+
+        let translator = FunTranslator::new(reqwest::Client::new(), server.url());
+
+        let result = translator
+            .translate("Hello", TranslatorType::Shakespeare)
+            .await;
+
+        assert!(matches!(result, Err(HttpClientError::ServiceUnavailable)));
         mock.assert_async().await;
     }
 

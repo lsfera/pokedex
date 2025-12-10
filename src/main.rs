@@ -129,6 +129,7 @@ enum HttpResponse<T> {
     Success(String, T),
     NotFound,
     InternalError,
+    ServiceUnavailable,
 }
 
 struct JsonResponse<T>(T);
@@ -146,6 +147,7 @@ impl<T: serde::Serialize> IntoResponse for HttpResponse<JsonResponse<T>> {
                 .into_response(),
             HttpResponse::NotFound => StatusCode::NOT_FOUND.into_response(),
             HttpResponse::InternalError => StatusCode::INTERNAL_SERVER_ERROR.into_response(),
+            HttpResponse::ServiceUnavailable => StatusCode::SERVICE_UNAVAILABLE.into_response(),
         }
     }
 }
@@ -163,6 +165,7 @@ impl IntoResponse for HttpResponse<String> {
                 .into_response(),
             HttpResponse::NotFound => StatusCode::NOT_FOUND.into_response(),
             HttpResponse::InternalError => StatusCode::INTERNAL_SERVER_ERROR.into_response(),
+            HttpResponse::ServiceUnavailable => StatusCode::SERVICE_UNAVAILABLE.into_response(),
         }
     }
 }
@@ -171,6 +174,7 @@ impl<T> From<HttpClientError> for HttpResponse<T> {
     fn from(error: HttpClientError) -> Self {
         match error {
             HttpClientError::NotFound => HttpResponse::NotFound,
+            HttpClientError::ServiceUnavailable => HttpResponse::ServiceUnavailable,
             _ => HttpResponse::InternalError,
         }
     }
@@ -287,6 +291,8 @@ async fn main() -> anyhow::Result<()> {
             ("Content-Language" = String, description = "Language of the returned Pokemon description")
         )),
         (status = 404, description = "Pokemon not found"),
+        (status = 406, description = "No acceptable language found for Pokemon description"),
+        (status = 503, description = "Service unavailable"),
         (status = 500, description = "Internal server error")
     )
 )]
@@ -322,6 +328,10 @@ async fn get_pokemon(
         HttpResponse::NotFound => {
             metrics::POKEMON_REQUESTS_NOT_FOUND.inc();
             debug!(pokemon = name, "Pokemon not found");
+        }
+        HttpResponse::ServiceUnavailable => {
+            metrics::SERVICE_UNAVAILABLE_ERRORS.inc();
+            warn!(pokemon = name, "Pokemon service unavailable");
         }
         _ => {}
     }
@@ -365,7 +375,9 @@ async fn get_pokemon(
             ("Content-Language" = String, description = "Language of the returned translated description")
         )),
         (status = 404, description = "Pokemon not found"),
-        (status = 500, description = "Internal server error")
+        (status = 406, description = "No acceptable language found for Pokemon description"),
+        (status = 500, description = "Internal server error"),
+        (status = 503, description = "Service unavailable"),
     )
 )]
 async fn get_pokemon_translation(
@@ -394,11 +406,18 @@ async fn get_pokemon_translation(
                 .ok_or(HttpClientError::NotFound)
         })
         .map(|(lang, d, t)| async move {
-            state
+            match state
                 .fun_translator
                 .translate(&d, t)
                 .await
-                .map(|tr| (lang, tr.contents.translated))
+            {
+                Ok(tr) => Ok((lang, tr.contents.translated)),
+                Err(HttpClientError::RateLimited) => {
+                    metrics::RATE_LIMITED_ERRORS.inc();
+                    Err(HttpClientError::RateLimited)
+                }
+                Err(e) => Err(e),
+            }
         }) {
         Ok(f) => f
             .await
@@ -415,6 +434,11 @@ async fn get_pokemon_translation(
         HttpResponse::NotFound => {
             metrics::TRANSLATIONS_FAILED.inc();
             debug!(pokemon = name, "Pokemon not found for translation");
+        }
+        HttpResponse::ServiceUnavailable => {
+            metrics::SERVICE_UNAVAILABLE_ERRORS.inc();
+            metrics::TRANSLATIONS_FAILED.inc();
+            warn!(pokemon = name, "Translation service unavailable");
         }
         _ => {
             metrics::TRANSLATIONS_FAILED.inc();

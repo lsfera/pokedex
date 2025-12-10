@@ -184,6 +184,7 @@ impl PokemonApiProxy for PokemonApiProxyClient {
             .map_err(|_| HttpClientError::RequestFailed)
             .and_then(|r| match r.status() {
                 StatusCode::NOT_FOUND => Err(HttpClientError::NotFound),
+                StatusCode::SERVICE_UNAVAILABLE => Err(HttpClientError::ServiceUnavailable),
                 // NOTE: by default redirects followed automatically by reqwest::Client: https://docs.rs/reqwest/latest/reqwest/#redirect-policies
                 _ => Ok(r),
             })?
@@ -200,6 +201,7 @@ impl PokemonApiProxy for PokemonApiProxyClient {
             .map_err(|_| HttpClientError::RequestFailed)
             .and_then(|r| match r.status() {
                 StatusCode::NOT_FOUND => Err(HttpClientError::NotFound),
+                StatusCode::SERVICE_UNAVAILABLE => Err(HttpClientError::ServiceUnavailable),
                 // NOTE: by default redirects followed automatically by reqwest::Client: https://docs.rs/reqwest/latest/reqwest/#redirect-policies
                 _ => Ok(r),
             })?
@@ -439,6 +441,112 @@ mod tests {
             .await;
 
         assert!(matches!(result, Err(HttpClientError::NotAcceptable)));
+    }
+
+    struct MockServiceUnavailableClient;
+
+    #[async_trait]
+    impl PokemonApiProxy for MockServiceUnavailableClient {
+        async fn get_base_pokemon(
+            &self,
+            _name: &str,
+        ) -> Result<BasePokemonResponse, HttpClientError> {
+            Err(HttpClientError::ServiceUnavailable)
+        }
+
+        async fn get_species(
+            &self,
+            _species_url: &str,
+        ) -> Result<SpeciesResponse, HttpClientError> {
+            Err(HttpClientError::ServiceUnavailable)
+        }
+    }
+
+    #[tokio::test]
+    async fn returns_service_unavailable_on_base_pokemon_unavailable() {
+        let client = PokeApiClient::new(Box::new(MockServiceUnavailableClient));
+
+        let result = client
+            .get_pokemon("pikachu", &["en".to_string()], false)
+            .await;
+
+        assert!(matches!(result, Err(HttpClientError::ServiceUnavailable)));
+    }
+
+    #[tokio::test]
+    async fn returns_service_unavailable_on_species_unavailable() {
+        let base = BasePokemonResponse {
+            id: 25,
+            name: "pikachu".to_string(),
+            species: SpeciesReference {
+                url: "https://pokeapi.co/api/v2/pokemon-species/25".to_string(),
+            },
+        };
+
+        struct MockPartiallyUnavailableClient {
+            base: BasePokemonResponse,
+        }
+
+        #[async_trait]
+        impl PokemonApiProxy for MockPartiallyUnavailableClient {
+            async fn get_base_pokemon(
+                &self,
+                _name: &str,
+            ) -> Result<BasePokemonResponse, HttpClientError> {
+                Ok(BasePokemonResponse {
+                    id: self.base.id,
+                    name: self.base.name.clone(),
+                    species: SpeciesReference {
+                        url: self.base.species.url.clone(),
+                    },
+                })
+            }
+
+            async fn get_species(
+                &self,
+                _species_url: &str,
+            ) -> Result<SpeciesResponse, HttpClientError> {
+                Err(HttpClientError::ServiceUnavailable)
+            }
+        }
+
+        let client = PokeApiClient::new(Box::new(MockPartiallyUnavailableClient { base }));
+
+        let result = client
+            .get_pokemon("pikachu", &["en".to_string()], false)
+            .await;
+
+        assert!(matches!(result, Err(HttpClientError::ServiceUnavailable)));
+    }
+
+    struct MockRateLimitedClient;
+
+    #[async_trait]
+    impl PokemonApiProxy for MockRateLimitedClient {
+        async fn get_base_pokemon(
+            &self,
+            _name: &str,
+        ) -> Result<BasePokemonResponse, HttpClientError> {
+            Err(HttpClientError::RateLimited)
+        }
+
+        async fn get_species(
+            &self,
+            _species_url: &str,
+        ) -> Result<SpeciesResponse, HttpClientError> {
+            Err(HttpClientError::RateLimited)
+        }
+    }
+
+    #[tokio::test]
+    async fn returns_rate_limited_on_base_pokemon_rate_limited() {
+        let client = PokeApiClient::new(Box::new(MockRateLimitedClient));
+
+        let result = client
+            .get_pokemon("pikachu", &["en".to_string()], false)
+            .await;
+
+        assert!(matches!(result, Err(HttpClientError::RateLimited)));
     }
 
     mod get_translator_tests {

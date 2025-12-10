@@ -65,6 +65,8 @@ Prometheus metrics are exposed at the `/metrics` endpoint in Prometheus text for
 - `translations_total` - total translation requests
 - `translations_succeeded` - successful translations
 - `translations_failed` - failed translations
+- `service_unavailable_errors_total` - service unavailable errors (503)
+- `rate_limited_errors_total` - rate limited errors (429) from external APIs
 
 Example:
 ```bash

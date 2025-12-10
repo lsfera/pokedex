@@ -22,6 +22,7 @@ pub enum HttpClientError {
     RateLimited,
     RequestFailed,
     ParseError,
+    ServiceUnavailable,
 }
 
 impl std::fmt::Display for HttpClientError {
@@ -32,6 +33,7 @@ impl std::fmt::Display for HttpClientError {
             HttpClientError::RequestFailed => write!(f, "request failed"),
             HttpClientError::ParseError => write!(f, "failed to parse response"),
             HttpClientError::RateLimited => write!(f, "rate limited by the server"),
+            HttpClientError::ServiceUnavailable => write!(f, "service unavailable"),
         }
     }
 }
