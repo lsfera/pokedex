@@ -1,3 +1,34 @@
+//! # Pokemon REST API
+//!
+//! A web service that enriches Pokémon data from [PokéAPI](https://pokeapi.co/) by applying
+//! fun translations based on Pokémon characteristics using the [Fun Translations API](https://funtranslations.com/api/).
+//!
+//! ## Features
+//!
+//! - **Content Negotiation**: Supports HTTP `Accept-Language` header for multi-language descriptions
+//! - **OpenAPI Integration**: Auto-generated API documentation with Swagger UI
+//! - **Prometheus Metrics**: Built-in metrics endpoint for monitoring
+//! - **Distributed Tracing**: Structured logging with tracing spans for observability
+//! - **Health Checks**: Dedicated `/health` endpoint for service availability checks
+//!
+//! ## Architecture
+//!
+//! The application uses a layered architecture:
+//! - **HTTP Layer** (`http::client`): HTTP client wrapper for external APIs
+//! - **Pokemon API Layer** (`pokemon_api::client`): PokéAPI integration with language negotiation
+//! - **Translator Layer** (`translator::client`): Fun Translations API integration
+//! - **Metrics Layer** (`metrics`): Prometheus metrics collection
+//! - **Configuration Layer** (`config`): CLI/env configuration management
+//!
+//! ## Request Flow
+//!
+//! 1. Client sends request to `/pokemon/{name}` with optional `Accept-Language` header
+//! 2. Handler creates a tracing span for request tracking
+//! 3. Pokemon API client fetches base data and species information
+//! 4. Language negotiation selects best available language
+//! 5. Description is returned with `Content-Language` header
+//! 6. Metrics are incremented for monitoring
+
 use accept_language::parse;
 use axum::{
     extract::{Path, State},
@@ -26,7 +57,14 @@ use translator::client::{FunTranslator, Translator};
 
 use crate::{config::ConfigDescriptor, constants::DEFAULT_LANGUAGE, http::client::HttpClientError};
 
+/// Extension trait for parsing `Accept-Language` HTTP headers with quality values.
+///
+/// Supports RFC 7231 language tags with quality preferences and wildcard matching.
+/// Example: `"es;q=0.9,en;q=0.8,*"` returns `(["es", "en"], true)`
 trait AcceptLanguageExt {
+    /// Parses the `Accept-Language` header into a tuple of (languages, has_wildcard).
+    ///
+    /// Returns empty language list with wildcard=true if no header is present.
     fn parse_accept_language(&self) -> (Vec<String>, bool);
 }
 
@@ -44,6 +82,9 @@ impl AcceptLanguageExt for HeaderMap {
     }
 }
 
+/// OpenAPI documentation schema for the Pokémon API.
+///
+/// Automatically generates Swagger UI from this definition and serves it at `/swagger-ui`.
 #[derive(OpenApi)]
 #[openapi(
     paths(
@@ -67,12 +108,23 @@ impl AcceptLanguageExt for HeaderMap {
 )]
 struct ApiDoc;
 
+/// Application state containing shared dependencies.
+///
+/// This is passed to all request handlers and contains:
+/// - `pokemon_api`: Client for fetching Pokémon data with language negotiation
+/// - `fun_translator`: Client for translating descriptions via Fun Translations API
 #[derive(Clone)]
 struct AppState {
     pokemon_api: std::sync::Arc<dyn PokemonApi>,
     fun_translator: std::sync::Arc<dyn Translator>,
 }
 
+/// HTTP response enum supporting multiple content types and language headers.
+///
+/// Variants:
+/// - `Success(lang, T)`: 200 OK with Content-Language header
+/// - `NotFound`: 404 Not Found
+/// - `InternalError`: 500 Internal Server Error
 enum HttpResponse<T> {
     Success(String, T),
     NotFound,
@@ -81,7 +133,9 @@ enum HttpResponse<T> {
 
 struct JsonResponse<T>(T);
 
+/// Helper wrapper for JSON responses with transparent serialization.
 impl<T: serde::Serialize> IntoResponse for HttpResponse<JsonResponse<T>> {
+    /// Converts HttpResponse to axum Response with appropriate HTTP status and headers.
     fn into_response(self) -> Response {
         match self {
             HttpResponse::Success(lang, JsonResponse(data)) => (
@@ -96,7 +150,9 @@ impl<T: serde::Serialize> IntoResponse for HttpResponse<JsonResponse<T>> {
     }
 }
 
+/// Helper wrapper for plain text responses.
 impl IntoResponse for HttpResponse<String> {
+    /// Converts HttpResponse to axum Response with appropriate HTTP status and headers.
     fn into_response(self) -> Response {
         match self {
             HttpResponse::Success(lang, data) => (
@@ -120,6 +176,23 @@ impl<T> From<HttpClientError> for HttpResponse<T> {
     }
 }
 
+/// Application entry point.
+///
+/// Initializes tracing, metrics, and configuration, then starts the HTTP server.
+///
+/// # Configuration
+///
+/// Configuration is loaded from environment variables and CLI arguments (CLI takes precedence).
+/// See `config::AppConfig::load()` for details.
+///
+/// # Tracing
+///
+/// Structured logging is initialized with `tracing-subscriber` using the `RUST_LOG` environment variable.
+/// Default level is INFO.
+///
+/// # Errors
+///
+/// Returns an error if configuration fails or if the server cannot bind to the configured port.
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     // Initialize tracing
@@ -177,6 +250,30 @@ async fn main() -> anyhow::Result<()> {
     Ok(())
 }
 
+/// Fetches Pokémon information with language negotiation.
+///
+/// # Arguments
+///
+/// * `state` - Application state containing Pokemon API client and translator
+/// * `name` - Pokémon name to fetch
+/// * `headers` - HTTP headers including optional `Accept-Language`
+///
+/// # Returns
+///
+/// Returns 200 OK with Pokemon data and Content-Language header on success,
+/// 404 Not Found if the Pokémon doesn't exist or name is empty,
+/// or 500 Internal Server Error on unexpected failures.
+///
+/// # Language Negotiation
+///
+/// Respects the `Accept-Language` header (RFC 7231) for selecting response language.
+/// Falls back to English if requested language is unavailable and wildcard is present,
+/// or returns 406 Not Acceptable if no suitable language is found.
+///
+/// # Tracing
+///
+/// Creates a distributed tracing span `get_pokemon` with pokemon_name field.
+/// Logs base Pokemon fetch, species fetch, and language selection at debug level.
 #[utoipa::path(
     get,
     path = "/pokemon/{name}",
@@ -232,6 +329,30 @@ async fn get_pokemon(
     result
 }
 
+/// Fetches and translates a Pokémon's description.
+///
+/// # Arguments
+///
+/// * `state` - Application state containing Pokemon API client and translator
+/// * `name` - Pokémon name to fetch and translate
+///
+/// # Returns
+///
+/// Returns 200 OK with translated description and Content-Language header on success,
+/// 404 Not Found if the Pokémon doesn't exist, name is empty, or has no description,
+/// or 500 Internal Server Error on translation or API failures.
+///
+/// # Translation Process
+///
+/// 1. Fetches Pokémon data from PokéAPI (using DEFAULT_LANGUAGE: English)
+/// 2. Extracts description text and determines translator type from Pokémon species
+/// 3. Sends description to Fun Translations API with appropriate translator
+/// 4. Returns translated text as plain text (text/plain)
+///
+/// # Tracing
+///
+/// Creates a distributed tracing span `get_pokemon_translation` with pokemon_name field.
+/// Logs Pokemon API calls and translation attempts at debug level.
 #[utoipa::path(
     get,
     path = "/pokemon/{name}/translation/",
@@ -304,6 +425,17 @@ async fn get_pokemon_translation(
     response
 }
 
+/// Health check endpoint for monitoring and orchestration systems.
+///
+/// Returns 200 OK immediately without performing any checks.
+/// Used by Kubernetes probes, load balancers, and monitoring systems to verify service availability.
+///
+/// # Example
+///
+/// ```sh
+/// curl http://localhost:5000/health
+/// # Response: 200 OK (empty body)
+/// ```
 #[utoipa::path(
     get,
     path = "/health",
@@ -314,6 +446,28 @@ async fn health() -> impl IntoResponse {
     StatusCode::OK
 }
 
+/// Prometheus metrics endpoint.
+///
+/// Exposes all application metrics in Prometheus text format (version 0.0.4).
+/// Metrics include request counts, latencies, translation successes/failures, and more.
+///
+/// # Metrics Exposed
+///
+/// - `pokemon_requests_total` - Total Pokemon data requests
+/// - `pokemon_requests_found` - Successful Pokemon requests
+/// - `pokemon_requests_not_found` - Pokemon not found (404) responses
+/// - `translations_total` - Total translation requests
+/// - `translations_succeeded` - Successful translations
+/// - `translations_failed` - Failed translations
+/// - `http_requests_total` - Total HTTP requests by endpoint/method
+/// - `http_request_duration_seconds` - Request duration histogram
+///
+/// # Example
+///
+/// ```sh
+/// curl http://localhost:5000/metrics
+/// # Response: Prometheus text format metrics
+/// ```
 #[utoipa::path(
     get,
     path = "/metrics",

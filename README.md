@@ -131,27 +131,55 @@ PORT=5000 cargo run -- --port 8080  # server will use port 8080
 Run unit tests:
 ```bash
 # Run all unit tests
-cargo test --lib
+cargo test
 
 # Run tests with output
-cargo test --lib -- --nocapture
+cargo test -- --nocapture
 
 # Run specific test
-cargo test --lib pokemon_requests_found
-```
-
-Run integration tests:
-```bash
-# Run all integration tests (requires network access to real APIs)
-cargo test --test '*' -- --include-ignored
-
-# Run specific integration test
-cargo test --test integration_test -- --include-ignored
+cargo test pokemon_requests_found
 ```
 
 Run all tests (unit + integration):
 ```bash
 cargo test -- --include-ignored
+```
+
+## code documentation
+
+The codebase is fully documented with rustdoc comments. Key documented components include:
+
+### Main Module (`src/main.rs`)
+
+- **Module documentation**: Provides architecture overview, features list, and request flow
+- **Trait documentation**: `AcceptLanguageExt` trait for RFC 7231 language header parsing
+- **Handler documentation**: Comprehensive docs for:
+  - `get_pokemon()` - Language negotiation and response handling
+  - `get_pokemon_translation()` - Translation workflow and API interactions
+  - `health()` - Health check usage and monitoring integration
+  - `metrics_endpoint()` - Metrics exposure and available metrics list
+- **Type documentation**: `AppState`, `HttpResponse<T>`, and `JsonResponse<T>` structs
+
+### Other Modules
+
+- **`config`**: Configuration loading from CLI args and environment variables
+- **`metrics`**: Prometheus metrics definitions and registry management
+- **`pokemon_api::client`**: PokéAPI client with instrumentation details
+- **`translator::client`**: Fun Translations API integration
+
+### Generating Documentation
+
+Generate and view the full API documentation:
+
+```bash
+# Generate documentation
+cargo doc --open
+
+# This opens a browser with fully hyperlinked documentation including:
+# - Module hierarchy and relationships
+# - Type definitions and trait implementations
+# - Usage examples for key components
+# - Links between documented items
 ```
 
 ## docker build

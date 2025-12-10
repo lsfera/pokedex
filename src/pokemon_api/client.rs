@@ -1,3 +1,25 @@
+//! # Pokemon API Client
+//!
+//! This module handles integration with the [PokéAPI](https://pokeapi.co/) including:
+//! - Fetching base Pokémon data
+//! - Retrieving species information with flavor text descriptions
+//! - Language negotiation with fallback support
+//! - Automatic translator type selection based on Pokémon characteristics
+//!
+//! ## Language Negotiation
+//!
+//! The module supports RFC 7231 language negotiation with the following behavior:
+//! 1. Attempts to find a description in requested languages (in order)
+//! 2. Falls back to English if available and wildcard is present
+//! 3. Falls back to first available language if no match and wildcard is present
+//! 4. Returns `NotAcceptable` error if no suitable language found and no wildcard
+//!
+//! ## Translator Selection
+//!
+//! Translator type is automatically determined by the Pokémon's characteristics:
+//! - **Yoda translator**: Legendary Pokémon or cave habitat
+//! - **Shakespeare translator**: All other Pokémon
+
 use crate::{
     constants::DEFAULT_LANGUAGE,
     http::client::{HttpClientError, TranslatorType},
@@ -9,6 +31,10 @@ use std::collections::HashMap;
 use utoipa::ToSchema;
 use tracing::{debug, instrument};
 
+/// A Pokémon with enriched data including descriptions and characteristics.
+///
+/// This struct represents a Pokémon fetched from PokéAPI with additional metadata
+/// used for determining translation style.
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct Pokemon {
     /// Pokemon ID
@@ -25,6 +51,12 @@ pub struct Pokemon {
 }
 
 impl Pokemon {
+    /// Determines the appropriate translator type based on Pokémon characteristics.
+    ///
+    /// # Returns
+    ///
+    /// - `TranslatorType::Yoda` if the Pokémon is legendary or lives in caves
+    /// - `TranslatorType::Shakespeare` for all other Pokémon
     pub fn get_translator(&self) -> TranslatorType {
         match (self.habitat.as_deref(), self.is_legendary) {
             (Some("cave"), _) => TranslatorType::Yoda,
@@ -34,8 +66,13 @@ impl Pokemon {
     }
 }
 
+/// Result type for Pokémon API operations.
+///
+/// Returns a tuple of (language, Pokemon) on success, containing the language
+/// of the returned Pokémon description.
 pub type PokemonResult = Result<(String, Pokemon), HttpClientError>;
 
+/// Response from PokéAPI `/pokemon/{name}` endpoint.
 #[derive(Debug, Deserialize)]
 pub struct BasePokemonResponse {
     id: i32, // NOTE: i32 should be enough: there are many pokemon out there, but not that many!
@@ -48,6 +85,10 @@ struct SpeciesReference {
     url: String,
 }
 
+/// Response from PokéAPI `/pokemon-species/{id}` endpoint.
+///
+/// Contains species-level metadata including habitat, legendary status,
+/// and multilingual flavor text descriptions.
 #[derive(Debug, Deserialize)]
 pub struct SpeciesResponse {
     habitat: Option<HabitatReference>,
@@ -71,8 +112,30 @@ pub struct LanguageReference {
     name: String,
 }
 
+/// Trait for fetching Pokémon data with language negotiation.
+///
+/// Implementations handle the complete workflow of fetching base data,
+/// species information, and selecting descriptions in requested languages.
 #[async_trait]
 pub trait PokemonApi: Send + Sync {
+    /// Fetches a Pokémon with language negotiation.
+    ///
+    /// # Arguments
+    ///
+    /// * `name` - Pokémon name to fetch (case-insensitive)
+    /// * `languages` - List of preferred languages in priority order
+    /// * `has_wildcard` - Whether `Accept-Language` contains wildcard (`*`)
+    ///
+    /// # Returns
+    ///
+    /// Returns `(language, Pokemon)` where language is the language code
+    /// of the returned description.
+    ///
+    /// # Errors
+    ///
+    /// - `NotFound` if Pokémon doesn't exist or has no descriptions
+    /// - `NotAcceptable` if no description in requested languages and no wildcard
+    /// - `RequestFailed` or `ParseError` on API communication issues
     async fn get_pokemon(
         &self,
         name: &str,
@@ -81,18 +144,32 @@ pub trait PokemonApi: Send + Sync {
     ) -> PokemonResult;
 }
 
+/// Low-level trait for making HTTP requests to PokéAPI.
+///
+/// This trait abstracts the HTTP layer, allowing for easy testing with mocks.
 #[async_trait]
 pub trait PokemonApiProxy: Send + Sync {
+    /// Fetches base Pokémon data from the `/pokemon/{name}` endpoint.
     async fn get_base_pokemon(&self, name: &str) -> Result<BasePokemonResponse, HttpClientError>;
+    /// Fetches species data from the `/pokemon-species/{id}` endpoint.
     async fn get_species(&self, species_url: &str) -> Result<SpeciesResponse, HttpClientError>;
 }
 
+/// HTTP client implementation for PokéAPI requests.
+///
+/// Handles HTTP communication with PokéAPI including error handling and status code interpretation.
 pub struct PokemonApiProxyClient {
     client: reqwest::Client,
     base_url: String,
 }
 
 impl PokemonApiProxyClient {
+    /// Creates a new PokéAPI HTTP client.
+    ///
+    /// # Arguments
+    ///
+    /// * `client` - Configured reqwest client
+    /// * `base_url` - Base URL for PokéAPI (e.g., `https://pokeapi.co/api/v2`)
     pub fn new(client: reqwest::Client, base_url: String) -> Self {
         PokemonApiProxyClient { client, base_url }
     }
@@ -132,11 +209,20 @@ impl PokemonApiProxy for PokemonApiProxyClient {
     }
 }
 
+/// High-level Pokémon API client with language negotiation.
+///
+/// Coordinates fetching base Pokémon data, species information, and selecting
+/// descriptions based on requested languages with intelligent fallback.
 pub struct PokeApiClient {
     client: Box<dyn PokemonApiProxy + Send + Sync>,
 }
 
 impl PokeApiClient {
+    /// Creates a new Pokémon API client.
+    ///
+    /// # Arguments
+    ///
+    /// * `client` - HTTP proxy implementation for making requests
     pub fn new(client: Box<dyn PokemonApiProxy + Send + Sync>) -> Self {
         Self { client }
     }

@@ -1,7 +1,22 @@
+//! # Fun Translations API Client
+//!
+//! This module provides integration with the [Fun Translations API](https://funtranslations.com/api/)
+//! for translating Pokémon descriptions into various fun styles:
+//! - **Shakespeare**: Elizabethan English translation
+//! - **Yoda**: Star Wars Yoda speak translation
+//!
+//! ## Rate Limiting
+//!
+//! The Fun Translations API has rate limits. The client handles rate limiting errors
+//! gracefully by returning `HttpClientError::RateLimited`.
+
 use crate::http::client::{HttpClientError, TranslatorType};
 use reqwest::StatusCode;
 use serde::Deserialize;
 
+/// Response from Fun Translations API.
+///
+/// Contains metadata and the translated text.
 #[derive(Debug, Deserialize)]
 pub struct TranslationResponse {
     pub contents: TranslationContents,
@@ -9,23 +24,51 @@ pub struct TranslationResponse {
 
 #[derive(Debug, Deserialize)]
 pub struct TranslationContents {
+    /// The translated text in the requested translator style
     pub translated: String,
 }
 
+/// Trait for translating text using various fun styles.
 #[async_trait::async_trait]
 pub trait Translator: Send + Sync {
+    /// Translates text using the specified translator style.
+    ///
+    /// # Arguments
+    ///
+    /// * `text` - Text to translate
+    /// * `translator_type` - Style to use (Shakespeare or Yoda)
+    ///
+    /// # Returns
+    ///
+    /// Returns the translated text on success.
+    ///
+    /// # Errors
+    ///
+    /// - `NotFound` if the translator type endpoint doesn't exist (404)
+    /// - `RateLimited` if API rate limit is exceeded (429)
+    /// - `RequestFailed` on network errors
+    /// - `ParseError` on JSON parsing or server errors
     async fn translate(
         &self,
         text: &str,
         translator_type: TranslatorType,
     ) -> Result<TranslationResponse, HttpClientError>;
 }
+/// HTTP client for the Fun Translations API.
+///
+/// Handles translation requests using the Fun Translations API endpoints.
 pub struct FunTranslator {
     client: reqwest::Client,
     base_url: String,
 }
 
 impl FunTranslator {
+    /// Creates a new Fun Translator client.
+    ///
+    /// # Arguments
+    ///
+    /// * `client` - Configured reqwest client
+    /// * `base_url` - Base URL for Fun Translations API (e.g., `https://api.funtranslations.com/translate`)
     pub fn new(client: reqwest::Client, base_url: String) -> Self {
         FunTranslator { client, base_url }
     }
@@ -33,6 +76,15 @@ impl FunTranslator {
 
 #[async_trait::async_trait]
 impl Translator for FunTranslator {
+    /// Translates text using the Fun Translations API.
+    ///
+    /// Sends a POST request to the appropriate translator endpoint with the text
+    /// as form-encoded data.
+    ///
+    /// # Rate Limiting
+    ///
+    /// The API allows 5 requests per hour for free tier. Exceeding this returns
+    /// a 429 Too Many Requests error.
     async fn translate(
         &self,
         text: &str,
