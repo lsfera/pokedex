@@ -181,6 +181,9 @@ async fn get_pokemon(
     Path(name): Path<String>,
     headers: HeaderMap,
 ) -> HttpResponse<JsonResponse<Pokemon>> {
+    if name.trim().is_empty() {
+        return HttpResponse::NotFound;
+    }
     let (languages, has_wildcard) = headers.parse_accept_language();
     state
         .pokemon_api
@@ -209,6 +212,9 @@ async fn get_pokemon_translation(
     State(state): State<AppState>,
     Path(name): Path<String>,
 ) -> HttpResponse<String> {
+    if name.trim().is_empty() {
+        return HttpResponse::NotFound;
+    }
     match state
         .pokemon_api
         .get_pokemon(&name, &[DEFAULT_LANGUAGE.to_string()], false)
