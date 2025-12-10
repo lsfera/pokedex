@@ -7,6 +7,7 @@ use reqwest::StatusCode;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use utoipa::ToSchema;
+use tracing::{debug, instrument};
 
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct Pokemon {
@@ -143,18 +144,27 @@ impl PokeApiClient {
 
 #[async_trait]
 impl PokemonApi for PokeApiClient {
+    #[instrument(skip(self), fields(pokemon_name = %name))]
     async fn get_pokemon(
         &self,
         name: &str,
         languages: &[String],
         has_wildcard: bool,
     ) -> PokemonResult {
+        debug!("Fetching base pokemon data");
         let BasePokemonResponse { id, name, species } = self.client.get_base_pokemon(name).await?;
+        
+        debug!(pokemon_id = id, species_url = %species.url, "Fetching species data");
         let SpeciesResponse {
             habitat,
             is_legendary,
             flavor_text_entries,
         } = self.client.get_species(&species.url).await?;
+        debug!(
+            available_languages = ?flavor_text_entries.iter().map(|e| &e.language.name).collect::<Vec<_>>(),
+            "Processing language descriptions"
+        );
+        
         let flavor_texts: HashMap<&str, &str> = flavor_text_entries
             .iter()
             .map(|entry| (entry.language.name.as_str(), entry.flavor_text.as_str()))
@@ -167,13 +177,21 @@ impl PokemonApi for PokeApiClient {
         let not_acceptable = matches!((&description, has_wildcard), (None, false));
         match (flavor_text_entries.first(), not_acceptable) {
             // descriptions are empty
-            (None, _) => Err(HttpClientError::NotFound),
+            (None, _) => {
+                debug!("No descriptions available");
+                Err(HttpClientError::NotFound)
+            }
             // no description found from requested languages and no wildcard to fall back on
-            (_, true) => Err(HttpClientError::NotAcceptable),
+            (_, true) => {
+                debug!("Requested language not available and no wildcard");
+                Err(HttpClientError::NotAcceptable)
+            }
             (Some(first), false) => {
                 let (lang, desc) = if let Some((l, t)) = description {
+                    debug!(selected_language = %l, "Using requested language");
                     (l, t)
                 } else {
+                    debug!(fallback_language = %first.language.name, "Using fallback language");
                     (first.language.name.clone(), first.flavor_text.clone())
                 };
                 Ok((

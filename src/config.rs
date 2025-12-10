@@ -2,7 +2,7 @@ use once_cell::sync::Lazy;
 use regex::Regex;
 use std::env;
 
-use crate::constants::DEFAULT_PORT;
+use crate::constants::{DEFAULT_PORT, DEFAULT_RUST_LOG};
 
 // NOTE: unwrap() is acceptable here because the regex pattern is a compile-time constant
 // and we assume it's correct.
@@ -62,12 +62,23 @@ impl ConfigDescriptor {
         mandatory: None,
         default_value: Some(DEFAULT_PORT),
     };
-    const ALL: [Self; 5] = [
+
+    const RUST_LOG: Self = Self {
+        cli_arg_name: "--rust-log",
+        env_var_name: "RUST_LOG",
+        description: "tracing log level (e.g., \"info\", \"debug\", etc.)",
+        name: "rust log",
+        mandatory: None,
+        default_value: Some(DEFAULT_RUST_LOG),
+    };
+
+    const ALL: [Self; 6] = [
         Self::POKEAPI_HOST,
         Self::FUN_TRANSLATIONS_HOST,
         Self::PORT,
         Self::POKEAPI_SECURE,
         Self::FUN_TRANSLATIONS_SECURE,
+        Self::RUST_LOG,
     ];
 
     pub fn print_usage() {

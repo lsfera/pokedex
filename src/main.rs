@@ -10,6 +10,7 @@ use utoipa::OpenApi;
 use utoipa_axum::router::OpenApiRouter;
 use utoipa_axum::routes;
 use utoipa_swagger_ui::{Config, SwaggerUi};
+use tracing::{info, debug, warn};
 
 mod config;
 mod constants;
@@ -121,6 +122,16 @@ impl<T> From<HttpClientError> for HttpResponse<T> {
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
+    // Initialize tracing
+    tracing_subscriber::fmt()
+        .with_env_filter(
+            tracing_subscriber::EnvFilter::from_default_env()
+                .add_directive(tracing_subscriber::filter::LevelFilter::INFO.into()),
+        )
+        .init();
+    
+    info!("Starting Pokemon API server");
+    
     metrics::init();
     
     let config = match config::AppConfig::load() {
@@ -161,6 +172,7 @@ async fn main() -> anyhow::Result<()> {
         .with_state(state);
 
     let listener = tokio::net::TcpListener::bind(format!("0.0.0.0:{}", config.port)).await?;
+    info!("Server listening on 0.0.0.0:{}", config.port);
     axum::serve(listener, app).await?;
     Ok(())
 }
@@ -186,10 +198,15 @@ async fn get_pokemon(
     Path(name): Path<String>,
     headers: HeaderMap,
 ) -> HttpResponse<JsonResponse<Pokemon>> {
+    let span = tracing::info_span!("get_pokemon", pokemon_name = %name);
+    let _guard = span.enter();
+    
     if name.trim().is_empty() {
+        warn!("Empty pokemon name requested");
         return HttpResponse::NotFound;
     }
     
+    debug!("Fetching pokemon: {}", name);
     metrics::POKEMON_REQUESTS_TOTAL.inc();
     
     let (languages, has_wildcard) = headers.parse_accept_language();
@@ -201,8 +218,14 @@ async fn get_pokemon(
         .unwrap_or_else(Into::into);
     
     match &result {
-        HttpResponse::Success(_, _) => metrics::POKEMON_REQUESTS_FOUND.inc(),
-        HttpResponse::NotFound => metrics::POKEMON_REQUESTS_NOT_FOUND.inc(),
+        HttpResponse::Success(lang, _) => {
+            metrics::POKEMON_REQUESTS_FOUND.inc();
+            info!(pokemon = name, language = lang, "Successfully fetched pokemon");
+        }
+        HttpResponse::NotFound => {
+            metrics::POKEMON_REQUESTS_NOT_FOUND.inc();
+            debug!(pokemon = name, "Pokemon not found");
+        }
         _ => {}
     }
     
@@ -228,10 +251,15 @@ async fn get_pokemon_translation(
     State(state): State<AppState>,
     Path(name): Path<String>,
 ) -> HttpResponse<String> {
+    let span = tracing::info_span!("get_pokemon_translation", pokemon_name = %name);
+    let _guard = span.enter();
+    
     if name.trim().is_empty() {
+        warn!("Empty pokemon name requested for translation");
         return HttpResponse::NotFound;
     }
     
+    debug!("Translating pokemon description for: {}", name);
     metrics::TRANSLATIONS_TOTAL.inc();
     
     let response = match state
@@ -259,9 +287,18 @@ async fn get_pokemon_translation(
     };
     
     match &response {
-        HttpResponse::Success(_, _) => metrics::TRANSLATIONS_SUCCEEDED.inc(),
-        HttpResponse::NotFound => metrics::TRANSLATIONS_FAILED.inc(),
-        _ => metrics::TRANSLATIONS_FAILED.inc(),
+        HttpResponse::Success(_, _) => {
+            metrics::TRANSLATIONS_SUCCEEDED.inc();
+            info!(pokemon = name, "Successfully translated pokemon description");
+        }
+        HttpResponse::NotFound => {
+            metrics::TRANSLATIONS_FAILED.inc();
+            debug!(pokemon = name, "Pokemon not found for translation");
+        }
+        _ => {
+            metrics::TRANSLATIONS_FAILED.inc();
+            warn!(pokemon = name, "Translation failed");
+        }
     }
     
     response

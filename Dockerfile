@@ -43,8 +43,10 @@ ENV BINARY_NAME=$BINARY_NAME_DEFAULT
 # Configuration environment variables (override at runtime as needed)
 ENV RUST_LOG="info,$BINARY_NAME=debug" \
     PORT="5000" \
-    POKEAPI_BASE="https://pokeapi.co/api/v2" \
-    FUNTRANSLATIONS_BASE="https://api.funtranslations.com/translate"
+    POKEAPI_HOST="pokeapi.co" \
+    POKEAPI_SECURE="true" \
+    FUN_TRANSLATIONS_HOST="api.funtranslations.com" \
+    FUN_TRANSLATIONS_SECURE="true"
 
 COPY --from=builder /build-out/$BINARY_NAME /
 

@@ -12,7 +12,8 @@ The application can be configured via command-line arguments or environment vari
 | **pokeapi host** | hostname for [PokéAPI](https://pokeapi.co/) | `--pokeapi-host` | `POKEAPI_HOST` | `pokeapi.co` | x |
 | **pokeapi secure** | use HTTPS for [PokéAPI](https://pokeapi.co/) communication | `--pokeapi-secure` | `POKEAPI_SECURE` | `true` | |
 | **fun translations host** | hostname for [fun translations API](https://funtranslations.com/api/) | `--fun-translations-host` | `FUN_TRANSLATIONS_HOST` | `api.funtranslations.com` | x |
-| **fun translations secure** | use HTTPS for [fun translations API](https://funtranslations.com/api/) communication | `--fun-translations-secure` | `FUN_TRANSLATIONS_SECURE` | `true` | | 
+| **fun translations secure** | use HTTPS for [fun translations API](https://funtranslations.com/api/) communication | `--fun-translations-secure` | `FUN_TRANSLATIONS_SECURE` | `true` | |
+| **rust log** | tracing log level (e.g., `info`, `debug`, `trace`) | `--rust-log` | `RUST_LOG` | `info` | | 
 
 ## api documentation
 
@@ -70,6 +71,48 @@ Example:
 curl http://localhost:5000/metrics
 ```
 
+### tracing and logging
+
+The application uses structured logging with the `tracing` crate. Log verbosity is controlled via the `RUST_LOG` environment variable:
+
+```bash
+# Info level logging (default)
+RUST_LOG=info cargo run
+
+# Debug level for detailed operation logs
+RUST_LOG=debug cargo run
+
+# Trace level for maximum verbosity
+RUST_LOG=trace cargo run
+
+# Filter by module
+RUST_LOG=pokemon_api::client=debug,info cargo run
+```
+
+Logged information includes:
+- HTTP request details (Pokemon names, languages, status codes)
+- Pokemon API interactions (base Pokemon fetch, species data, language selection)
+- Translation operations (translator type, success/failure)
+- Error conditions with context
+
+### distributed tracing spans
+
+The application includes distributed tracing spans for request tracking across service boundaries. Each major operation is wrapped in a span containing relevant context:
+
+**Request Spans:**
+- `get_pokemon` - Root span for Pokemon data requests with `pokemon_name` field
+- `get_pokemon_translation` - Root span for Pokemon translation requests with `pokemon_name` field
+- Internal operations (Pokemon API calls, language negotiation) are automatically traced via `#[instrument]` macros
+
+Spans include structured fields that can be used by distributed tracing backends (e.g., Jaeger, Zipkin) to correlate requests across services and trace performance characteristics.
+
+Example with debug logging to see spans:
+```bash
+RUST_LOG=debug cargo run
+# Output includes span information:
+# 2024-12-10T10:30:45.123Z  INFO get_pokemon{pokemon_name=pikachu}: pokemon_api::client: Fetching base pokemon data
+```
+
 ### examples
 
 ```bash
@@ -118,9 +161,12 @@ with declarative policies.
 * ✅ Proper HTTP status codes (406 Not Acceptable for unsupported languages)
 * ✅ Comprehensive unit test coverage (15 tests) plus ignored integration test against real API
 * ✅ Docker multi-service setup with nginx and Swagger UI
+* ✅ Prometheus metrics with 8 tracked metrics
+* ✅ Structured logging with tracing instrumentation
+* ✅ Health check endpoint
 
 Some TODOs:
-* Add OpenTelemetry instrumentation
+* Add OpenTelemetry instrumentation for distributed tracing
 * Add a dashboard with dedicated metrics (p99/p95 by route)
 
 ## License
