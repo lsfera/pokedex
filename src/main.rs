@@ -14,6 +14,7 @@ use utoipa_swagger_ui::{Config, SwaggerUi};
 mod config;
 mod constants;
 mod http;
+mod metrics;
 mod pokemon_api;
 mod translator;
 
@@ -47,14 +48,15 @@ impl AcceptLanguageExt for HeaderMap {
     paths(
         get_pokemon,
         get_pokemon_translation,
-        health
+        health,
+        metrics_endpoint
     ),
     components(
         schemas(Pokemon)
     ),
     tags(
         (name = "pokemon", description = "Pokemon API endpoints"),
-        (name = "system", description = "Service health endpoints")
+        (name = "system", description = "Service health and metrics endpoints")
     ),
     info(
         title = "Pokemon API",
@@ -119,6 +121,8 @@ impl<T> From<HttpClientError> for HttpResponse<T> {
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
+    metrics::init();
+    
     let config = match config::AppConfig::load() {
         Ok(cfg) => cfg,
         Err(e) => {
@@ -145,6 +149,7 @@ async fn main() -> anyhow::Result<()> {
         .routes(routes!(get_pokemon))
         .routes(routes!(get_pokemon_translation))
         .routes(routes!(health))
+        .routes(routes!(metrics_endpoint))
         .split_for_parts();
 
     let app = router
@@ -184,13 +189,24 @@ async fn get_pokemon(
     if name.trim().is_empty() {
         return HttpResponse::NotFound;
     }
+    
+    metrics::POKEMON_REQUESTS_TOTAL.inc();
+    
     let (languages, has_wildcard) = headers.parse_accept_language();
-    state
+    let result = state
         .pokemon_api
         .get_pokemon(&name, &languages, has_wildcard)
         .await
         .map(|(lang, p)| HttpResponse::Success(lang, JsonResponse(p)))
-        .unwrap_or_else(Into::into)
+        .unwrap_or_else(Into::into);
+    
+    match &result {
+        HttpResponse::Success(_, _) => metrics::POKEMON_REQUESTS_FOUND.inc(),
+        HttpResponse::NotFound => metrics::POKEMON_REQUESTS_NOT_FOUND.inc(),
+        _ => {}
+    }
+    
+    result
 }
 
 #[utoipa::path(
@@ -215,7 +231,10 @@ async fn get_pokemon_translation(
     if name.trim().is_empty() {
         return HttpResponse::NotFound;
     }
-    match state
+    
+    metrics::TRANSLATIONS_TOTAL.inc();
+    
+    let response = match state
         .pokemon_api
         .get_pokemon(&name, &[DEFAULT_LANGUAGE.to_string()], false)
         .await
@@ -237,7 +256,15 @@ async fn get_pokemon_translation(
             .map(|(lang, text)| HttpResponse::Success(lang, text))
             .unwrap_or_else(Into::into),
         Err(e) => e.into(),
+    };
+    
+    match &response {
+        HttpResponse::Success(_, _) => metrics::TRANSLATIONS_SUCCEEDED.inc(),
+        HttpResponse::NotFound => metrics::TRANSLATIONS_FAILED.inc(),
+        _ => metrics::TRANSLATIONS_FAILED.inc(),
     }
+    
+    response
 }
 
 #[utoipa::path(
@@ -248,4 +275,20 @@ async fn get_pokemon_translation(
 )]
 async fn health() -> impl IntoResponse {
     StatusCode::OK
+}
+
+#[utoipa::path(
+    get,
+    path = "/metrics",
+    tag = "system",
+    responses((status = 200, description = "Prometheus format metrics"))
+)]
+async fn metrics_endpoint() -> impl IntoResponse {
+    (
+        StatusCode::OK,
+        [("Content-Type", "text/plain; version=0.0.4")],
+        prometheus::TextEncoder::new()
+            .encode_to_string(&metrics::REGISTRY.gather())
+            .unwrap_or_default(),
+    )
 }

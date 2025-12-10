@@ -22,6 +22,7 @@ The API provides interactive documentation via Swagger UI and exposes an OpenAPI
 - `GET /pokemon/{name}` - fetch Pokemon information with language negotiation support
 - `GET /pokemon/{name}/translation/` - fetch translated Pokemon description
 - `GET /health` - health check (returns 200 OK)
+- `GET /metrics` - Prometheus format metrics
 - `GET /api-docs/openapi.json` - OpenAPI specification (JSON)
 - `GET /swagger-ui` - Interactive Swagger UI documentation
 
@@ -53,6 +54,21 @@ The application includes built-in Swagger UI for interactive API exploration:
 - Access at: `http://localhost:5000/swagger-ui`
 - Automatically loads the OpenAPI spec from `/api-docs/openapi.json`
 - Test API endpoints directly from your browser
+
+### metrics
+
+Prometheus metrics are exposed at the `/metrics` endpoint in Prometheus text format. Tracked metrics include:
+- `pokemon_requests_total` - total Pokemon requests
+- `pokemon_requests_found` - successful Pokemon requests
+- `pokemon_requests_not_found` - Pokemon not found (404) requests
+- `translations_total` - total translation requests
+- `translations_succeeded` - successful translations
+- `translations_failed` - failed translations
+
+Example:
+```bash
+curl http://localhost:5000/metrics
+```
 
 ### examples
 
