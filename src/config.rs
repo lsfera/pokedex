@@ -146,6 +146,7 @@ pub struct AppConfig {
     pub fun_translations_host: String,
     pub fun_translations_secure: bool,
     pub port: u16,
+    pub rust_log: String,
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -233,12 +234,20 @@ impl AppConfig {
                     }),
             }
         };
+        let rust_log = {
+            let desc = &ConfigDescriptor::RUST_LOG;
+            match parse(desc) {
+                None => Ok(DEFAULT_RUST_LOG.to_string()),
+                Some(s) => Ok(s),
+            }
+        };
         match (
             &pokeapi_host,
             &fun_translations_host,
             &pokeapi_secure,
             &fun_translations_secure,
             &port,
+            &rust_log,
         ) {
             (
                 Ok(pokeapi_host),
@@ -246,12 +255,14 @@ impl AppConfig {
                 Ok(pokeapi_secure),
                 Ok(fun_translations_secure),
                 Ok(port),
+                Ok(rust_log)
             ) => Ok(AppConfig {
                 pokeapi_host: pokeapi_host.clone(),
                 fun_translations_host: fun_translations_host.clone(),
                 pokeapi_secure: *pokeapi_secure,
                 fun_translations_secure: *fun_translations_secure,
                 port: *port,
+                rust_log: rust_log.clone(),
             }),
             _ => {
                 let errors = [
@@ -260,6 +271,7 @@ impl AppConfig {
                     pokeapi_secure.err(),
                     fun_translations_secure.err(),
                     port.err(),
+                    rust_log.err(),
                 ]
                 .into_iter()
                 .flatten()

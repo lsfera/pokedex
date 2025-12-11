@@ -199,17 +199,6 @@ impl<T> From<HttpClientError> for HttpResponse<T> {
 /// Returns an error if configuration fails or if the server cannot bind to the configured port.
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-    // Initialize tracing
-    tracing_subscriber::fmt()
-        .with_env_filter(
-            tracing_subscriber::EnvFilter::from_default_env()
-                .add_directive(tracing_subscriber::filter::LevelFilter::INFO.into()),
-        )
-        .init();
-
-    info!("Starting Pokemon API server");
-
-    metrics::init();
 
     let config = match config::AppConfig::load() {
         Ok(cfg) => cfg,
@@ -219,6 +208,19 @@ async fn main() -> anyhow::Result<()> {
             exit(1);
         }
     };
+    // Initialize tracing
+    tracing_subscriber::fmt()
+        .with_env_filter(
+            tracing_subscriber::EnvFilter::from(config.rust_log.as_str())
+                .add_directive(tracing_subscriber::filter::LevelFilter::INFO.into()),
+        )
+        .init();
+
+    info!("Starting Pokemon API server");
+
+    metrics::init();
+
+    
     let pokeapi_base_client = Box::new(PokemonApiProxyClient::new(
         reqwest::Client::new(),
         config.pokeapi_base_url(),
