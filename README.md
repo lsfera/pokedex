@@ -192,7 +192,7 @@ cargo doc --open
 # build
 docker build -t pokemon-rest-api:dev .
 # run
-docker run --rm -p 5000:5000 pokemon-rest-api:dev
+docker run --rm -e PORT=8080 -p 8080:8080 pokemon-rest-api:dev
 ```
 
 ## Anything I'd do differently for a production API

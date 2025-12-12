@@ -199,7 +199,6 @@ impl<T> From<HttpClientError> for HttpResponse<T> {
 /// Returns an error if configuration fails or if the server cannot bind to the configured port.
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-
     let config = match config::AppConfig::load() {
         Ok(cfg) => cfg,
         Err(e) => {
@@ -220,7 +219,6 @@ async fn main() -> anyhow::Result<()> {
 
     metrics::init();
 
-    
     let pokeapi_base_client = Box::new(PokemonApiProxyClient::new(
         reqwest::Client::new(),
         config.pokeapi_base_url(),

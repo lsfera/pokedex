@@ -255,7 +255,7 @@ impl AppConfig {
                 Ok(pokeapi_secure),
                 Ok(fun_translations_secure),
                 Ok(port),
-                Ok(rust_log)
+                Ok(rust_log),
             ) => Ok(AppConfig {
                 pokeapi_host: pokeapi_host.clone(),
                 fun_translations_host: fun_translations_host.clone(),

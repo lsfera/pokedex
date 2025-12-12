@@ -40,9 +40,12 @@ USER dockeruser
 ARG BINARY_NAME_DEFAULT
 ENV BINARY_NAME=$BINARY_NAME_DEFAULT
 
+ARG DEFAULT_PORT=5000
+ENV PORT=$DEFAULT_PORT
+
 # Configuration environment variables (override at runtime as needed)
 ENV RUST_LOG="info,$BINARY_NAME=debug" \
-    PORT="5000" \
+    PORT=5000 \
     POKEAPI_HOST="pokeapi.co" \
     POKEAPI_SECURE="true" \
     FUN_TRANSLATIONS_HOST="api.funtranslations.com" \
@@ -50,6 +53,6 @@ ENV RUST_LOG="info,$BINARY_NAME=debug" \
 
 COPY --from=builder /build-out/$BINARY_NAME /
 
-EXPOSE 5000
+EXPOSE ${PORT}
 ENTRYPOINT ["/pokemon-rest-api"]
 CMD []
