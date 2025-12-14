@@ -129,13 +129,9 @@ pub struct EnvParser;
 
 impl ConfigParser for EnvParser {
     fn parse(&self, descriptor: &ConfigDescriptor) -> Option<String> {
-        env::var(descriptor.env_var_name).ok().and_then(|val| {
-            if val.is_empty() {
-                None
-            } else {
-                Some(val)
-            }
-        })
+        env::var(descriptor.env_var_name)
+            .ok()
+            .and_then(|val| if val.is_empty() { None } else { Some(val) })
     }
 }
 

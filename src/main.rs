@@ -35,7 +35,7 @@ use axum::{
     http::StatusCode,
     response::{AppendHeaders, IntoResponse, Json, Response},
 };
-use hyper::{header::CONTENT_LANGUAGE, HeaderMap};
+use hyper::{HeaderMap, header::CONTENT_LANGUAGE};
 use std::{process::exit, sync::Arc};
 use tracing::{debug, info, warn};
 use utoipa::OpenApi;
