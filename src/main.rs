@@ -224,13 +224,17 @@ async fn main() -> anyhow::Result<()> {
 
     metrics::init();
 
+    // Create a shared HTTP client for all external API calls
+    // This enables connection pooling and reduces resource usage
+    let http_client = reqwest::Client::new();
+
     let pokeapi_base_client = Box::new(PokemonApiProxyClient::new(
-        reqwest::Client::new(),
+        http_client.clone(),
         config.pokeapi_base_url(),
     )) as Box<dyn PokemonApiProxy + Send + Sync>;
     let pokemon_api = Arc::new(PokeApiClient::new(pokeapi_base_client)) as Arc<dyn PokemonApi>;
     let fun_translator = Arc::new(FunTranslator::new(
-        reqwest::Client::new(),
+        http_client.clone(),
         config.fun_translations_base_url(),
     )) as Arc<dyn Translator>;
     let state = AppState {
