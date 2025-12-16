@@ -103,7 +103,6 @@ impl AcceptLanguageExt for HeaderMap {
     ),
     info(
         title = "Pokemon API",
-        version = "0.1.0",
         description = "API for fetching Pokemon information and translations"
     )
 )]
