@@ -128,6 +128,7 @@ struct AppState {
 enum HttpResponse<T> {
     Success(String, T),
     NotFound,
+    NotAcceptable,
     InternalError,
     ServiceUnavailable,
 }
@@ -146,6 +147,7 @@ impl<T: serde::Serialize> IntoResponse for HttpResponse<JsonResponse<T>> {
             )
                 .into_response(),
             HttpResponse::NotFound => StatusCode::NOT_FOUND.into_response(),
+            HttpResponse::NotAcceptable => StatusCode::NOT_ACCEPTABLE.into_response(),
             HttpResponse::InternalError => StatusCode::INTERNAL_SERVER_ERROR.into_response(),
             HttpResponse::ServiceUnavailable => StatusCode::SERVICE_UNAVAILABLE.into_response(),
         }
@@ -164,6 +166,7 @@ impl IntoResponse for HttpResponse<String> {
             )
                 .into_response(),
             HttpResponse::NotFound => StatusCode::NOT_FOUND.into_response(),
+            HttpResponse::NotAcceptable => StatusCode::NOT_ACCEPTABLE.into_response(),
             HttpResponse::InternalError => StatusCode::INTERNAL_SERVER_ERROR.into_response(),
             HttpResponse::ServiceUnavailable => StatusCode::SERVICE_UNAVAILABLE.into_response(),
         }
@@ -174,6 +177,8 @@ impl<T> From<HttpClientError> for HttpResponse<T> {
     fn from(error: HttpClientError) -> Self {
         match error {
             HttpClientError::NotFound => HttpResponse::NotFound,
+            HttpClientError::NotAcceptable => HttpResponse::NotAcceptable,
+            HttpClientError::RateLimited => HttpResponse::ServiceUnavailable,
             HttpClientError::ServiceUnavailable => HttpResponse::ServiceUnavailable,
             _ => HttpResponse::InternalError,
         }
@@ -209,10 +214,9 @@ async fn main() -> anyhow::Result<()> {
     };
     // Initialize tracing
     tracing_subscriber::fmt()
-        .with_env_filter(
-            tracing_subscriber::EnvFilter::from(config.rust_log.as_str())
-                .add_directive(tracing_subscriber::filter::LevelFilter::INFO.into()),
-        )
+        .with_env_filter(tracing_subscriber::EnvFilter::from(
+            config.rust_log.as_str(),
+        ))
         .init();
 
     info!("Starting Pokemon API server");
