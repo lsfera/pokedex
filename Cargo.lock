@@ -1095,7 +1095,6 @@ dependencies = [
  "axum",
  "hyper",
  "jsonschema",
- "lazy_static",
  "mockito",
  "once_cell",
  "prometheus",

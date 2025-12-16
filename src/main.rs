@@ -33,6 +33,7 @@ use accept_language::parse;
 use axum::{
     extract::{Path, State},
     http::StatusCode,
+    middleware,
     response::{AppendHeaders, IntoResponse, Json, Response},
 };
 use hyper::{HeaderMap, header::CONTENT_LANGUAGE};
@@ -250,6 +251,7 @@ async fn main() -> anyhow::Result<()> {
                 .config(Config::default().validator_url("none"))
                 .url("/api-docs/openapi.json", api.clone()),
         )
+        .layer(middleware::from_fn(metrics::track_metrics))
         .with_state(state);
 
     let listener = tokio::net::TcpListener::bind(format!("0.0.0.0:{}", config.port)).await?;
