@@ -347,6 +347,10 @@ async fn get_pokemon(
             metrics::SERVICE_UNAVAILABLE_ERRORS.inc();
             warn!(pokemon = name, "Pokemon service unavailable");
         }
+        HttpResponse::InternalError => {
+            metrics::TRANSLATIONS_FAILED.inc();
+            warn!(pokemon = name, "Internal error during translation");
+        }
         _ => {}
     }
 
@@ -425,7 +429,7 @@ async fn get_pokemon_translation(
                 Ok(tr) => Ok((lang, tr.contents.translated)),
                 Err(HttpClientError::RateLimited) => {
                     metrics::RATE_LIMITED_ERRORS.inc();
-                    Err(HttpClientError::RateLimited)
+                    Ok((lang, d)) // Fallback to original description on rate limit
                 }
                 Err(e) => Err(e),
             }
@@ -454,6 +458,11 @@ async fn get_pokemon_translation(
             metrics::TRANSLATIONS_FAILED.inc();
             warn!(pokemon = name, "Translation service unavailable");
         }
+        HttpResponse::InternalError => {
+            metrics::TRANSLATIONS_FAILED.inc();
+            warn!(pokemon = name, "Internal error during translation");
+        }
+
         _ => {
             metrics::TRANSLATIONS_FAILED.inc();
             warn!(pokemon = name, "Translation failed");

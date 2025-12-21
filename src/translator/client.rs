@@ -100,6 +100,7 @@ impl Translator for FunTranslator {
                 StatusCode::NOT_FOUND => Err(HttpClientError::NotFound),
                 StatusCode::SERVICE_UNAVAILABLE => Err(HttpClientError::ServiceUnavailable),
                 StatusCode::TOO_MANY_REQUESTS => Err(HttpClientError::RateLimited),
+                StatusCode::INTERNAL_SERVER_ERROR => Err(HttpClientError::ServerError),
                 // NOTE: by default redirects followed automatically by reqwest::Client: https://docs.rs/reqwest/latest/reqwest/#redirect-policies
                 _ => Ok(r),
             })?
@@ -111,6 +112,7 @@ impl Translator for FunTranslator {
 
 #[cfg(test)]
 mod tests {
+
     use super::*;
 
     #[tokio::test]
@@ -248,7 +250,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn returns_parse_error_on_server_error() {
+    async fn returns_internal_server_error_on_server_error() {
         let mut server = mockito::Server::new_async().await;
         let mock = server
             .mock("POST", "/shakespeare.json")
@@ -265,7 +267,11 @@ mod tests {
             .translate("Hello", TranslatorType::Shakespeare)
             .await;
 
-        assert!(matches!(result, Err(HttpClientError::ParseError)));
+        assert!(result.is_err());
+        assert_eq!(
+            result.is_err_and(|e| e == HttpClientError::ServerError),
+            true
+        );
         mock.assert_async().await;
     }
 

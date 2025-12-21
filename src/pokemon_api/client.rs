@@ -202,6 +202,7 @@ impl PokemonApiProxy for PokemonApiProxyClient {
             .and_then(|r| match r.status() {
                 StatusCode::NOT_FOUND => Err(HttpClientError::NotFound),
                 StatusCode::SERVICE_UNAVAILABLE => Err(HttpClientError::ServiceUnavailable),
+                StatusCode::INTERNAL_SERVER_ERROR => Err(HttpClientError::ServerError),
                 // NOTE: by default redirects followed automatically by reqwest::Client: https://docs.rs/reqwest/latest/reqwest/#redirect-policies
                 _ => Ok(r),
             })?
