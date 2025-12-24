@@ -33,7 +33,7 @@ RUN set -eux; TARGET_TRIPLE=$(cat /tmp/target_triple); \
     cp target/"$TARGET_TRIPLE"/release/$BINARY_NAME /build-out/; \
     strip /build-out/$BINARY_NAME || true
 
-FROM scratch AS runtime
+FROM alpine AS runtime
 COPY --from=builder /etc/passwd /etc/passwd
 USER dockeruser
 
