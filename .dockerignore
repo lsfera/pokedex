@@ -1,0 +1,32 @@
+# target directory
+target/
+
+# Git
+.git/
+.gitignore
+
+# IDE
+.vscode/
+.idea/
+
+# Documentation
+*.md
+
+# Dev container
+.devcontainer/
+
+# Test files
+tests/
+
+# CI/CD
+.github/
+
+# Local env files
+.env
+.env.local
+
+# Logs
+*.log
+
+# Backup files
+*.bak

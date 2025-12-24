@@ -42,7 +42,6 @@ use tracing::{debug, info, warn};
 use utoipa::OpenApi;
 use utoipa_axum::router::OpenApiRouter;
 use utoipa_axum::routes;
-use utoipa_swagger_ui::{Config, SwaggerUi};
 
 mod config;
 mod constants;
@@ -248,11 +247,16 @@ async fn main() -> anyhow::Result<()> {
         .routes(routes!(metrics_endpoint))
         .split_for_parts();
 
+    // Serve OpenAPI JSON at /api-docs/openapi.json
+    let openapi_json = api.to_json().expect("OpenAPI JSON serialization");
     let app = router
-        .merge(
-            SwaggerUi::new("/swagger-ui")
-                .config(Config::default().validator_url("none"))
-                .url("/api-docs/openapi.json", api.clone()),
+        .route(
+            "/api-docs/openapi.json",
+            axum::routing::get(move || async move {
+                axum::response::Json(
+                    serde_json::from_str::<serde_json::Value>(&openapi_json).unwrap(),
+                )
+            }),
         )
         .layer(middleware::from_fn(metrics::track_metrics))
         .with_state(state);
