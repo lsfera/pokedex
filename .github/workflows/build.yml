@@ -1,22 +1,16 @@
 name: build
 
 on:
-  schedule:
-    - cron: "0 0 1 * *" # first day of every month
   push:
-    branches-ignore:
-      - main
-  workflow_dispatch:
+    branches: [ $default-branch ]
+  pull_request:
+    branches: [ $default-branch ]
 
 env:
   CARGO_TERM_COLOR: always
   RUST_BACKTRACE: 1
   RUSTDOCFLAGS: "--deny warnings"
   MINIMUM_SUPPORTED_RUST_VERSION: 1.90.0
-
-concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
 
 jobs:
   check:
