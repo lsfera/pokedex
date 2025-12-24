@@ -21,7 +21,7 @@ jobs:
     outputs:
       version: ${{ steps.release.outputs.version }}
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v6
         with:
           persist-credentials: false
       - name: install rust
@@ -35,7 +35,7 @@ jobs:
     name: create release
     needs: version
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v6
         with:
           persist-credentials: false
       - name: create github release
@@ -50,7 +50,7 @@ jobs:
     outputs:
       version: ${{ steps.version.outputs.version }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Build Docker container and push it to GitHub Packages
         uses: lojoh/build-and-push-multi-platform-docker-images-action@2.0
