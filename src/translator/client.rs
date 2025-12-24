@@ -268,10 +268,7 @@ mod tests {
             .await;
 
         assert!(result.is_err());
-        assert_eq!(
-            result.is_err_and(|e| e == HttpClientError::ServerError),
-            true
-        );
+        assert!(result.is_err_and(|e| e == HttpClientError::ServerError));
         mock.assert_async().await;
     }
 
