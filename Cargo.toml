@@ -28,7 +28,7 @@ tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt"] }
 
 [dev-dependencies]
-jsonschema = "0.37"
+jsonschema = "0.38"
 tokio-test = "0.4"
 tower      = "0.5"
 hyper      = "1"
