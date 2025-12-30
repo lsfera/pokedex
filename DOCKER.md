@@ -1,7 +1,3 @@
-#!/bin/bash
-set -e
-
-cat << 'EOF'
 Docker Compose Setup for Pokemon API
 =====================================
 
@@ -76,5 +72,3 @@ Features
 ✓ RFC 7231 language negotiation
 ✓ Automatic translator selection (Yoda/Shakespeare)
 ✓ Rate limit graceful degradation
-
-EOF
