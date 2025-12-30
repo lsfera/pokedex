@@ -301,6 +301,7 @@ impl PokemonApi for PokeApiClient {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use rstest::rstest;
 
     struct MockBaseClient {
         base: BasePokemonResponse,
@@ -364,6 +365,28 @@ mod tests {
 
         let mock = MockBaseClient { base, species };
         PokeApiClient::new(Box::new(mock))
+    }
+
+    /// Mock client that returns a specific error for base pokemon requests
+    struct MockErrorClient {
+        error: HttpClientError,
+    }
+
+    #[async_trait]
+    impl PokemonApiProxy for MockErrorClient {
+        async fn get_base_pokemon(
+            &self,
+            _name: &str,
+        ) -> Result<BasePokemonResponse, HttpClientError> {
+            Err(self.error.clone())
+        }
+
+        async fn get_species(
+            &self,
+            _species_url: &str,
+        ) -> Result<SpeciesResponse, HttpClientError> {
+            Err(self.error.clone())
+        }
     }
 
     #[tokio::test]
@@ -444,34 +467,23 @@ mod tests {
         assert!(matches!(result, Err(HttpClientError::NotAcceptable)));
     }
 
-    struct MockServiceUnavailableClient;
-
-    #[async_trait]
-    impl PokemonApiProxy for MockServiceUnavailableClient {
-        async fn get_base_pokemon(
-            &self,
-            _name: &str,
-        ) -> Result<BasePokemonResponse, HttpClientError> {
-            Err(HttpClientError::ServiceUnavailable)
-        }
-
-        async fn get_species(
-            &self,
-            _species_url: &str,
-        ) -> Result<SpeciesResponse, HttpClientError> {
-            Err(HttpClientError::ServiceUnavailable)
-        }
-    }
-
+    /// Parameterized test for API error propagation
+    #[rstest]
+    #[case::service_unavailable(HttpClientError::ServiceUnavailable)]
+    #[case::rate_limited(HttpClientError::RateLimited)]
+    #[case::not_found(HttpClientError::NotFound)]
+    #[case::server_error(HttpClientError::ServerError)]
     #[tokio::test]
-    async fn returns_service_unavailable_on_base_pokemon_unavailable() {
-        let client = PokeApiClient::new(Box::new(MockServiceUnavailableClient));
+    async fn propagates_api_errors(#[case] expected_error: HttpClientError) {
+        let client = PokeApiClient::new(Box::new(MockErrorClient {
+            error: expected_error.clone(),
+        }));
 
         let result = client
             .get_pokemon("pikachu", &["en".to_string()], false)
             .await;
 
-        assert!(matches!(result, Err(HttpClientError::ServiceUnavailable)));
+        assert!(matches!(&result, Err(e) if *e == expected_error));
     }
 
     #[tokio::test]
@@ -520,102 +532,39 @@ mod tests {
         assert!(matches!(result, Err(HttpClientError::ServiceUnavailable)));
     }
 
-    struct MockRateLimitedClient;
-
-    #[async_trait]
-    impl PokemonApiProxy for MockRateLimitedClient {
-        async fn get_base_pokemon(
-            &self,
-            _name: &str,
-        ) -> Result<BasePokemonResponse, HttpClientError> {
-            Err(HttpClientError::RateLimited)
-        }
-
-        async fn get_species(
-            &self,
-            _species_url: &str,
-        ) -> Result<SpeciesResponse, HttpClientError> {
-            Err(HttpClientError::RateLimited)
-        }
-    }
-
-    #[tokio::test]
-    async fn returns_rate_limited_on_base_pokemon_rate_limited() {
-        let client = PokeApiClient::new(Box::new(MockRateLimitedClient));
-
-        let result = client
-            .get_pokemon("pikachu", &["en".to_string()], false)
-            .await;
-
-        assert!(matches!(result, Err(HttpClientError::RateLimited)));
-    }
-
     mod get_translator_tests {
         use super::*;
+        use rstest::rstest;
 
-        #[test]
-        fn returns_yoda_for_cave_habitat() {
+        /// Parameterized test for translator type selection based on habitat and legendary status
+        #[rstest]
+        #[case::cave_habitat(1, "zubat", Some("cave"), false, TranslatorType::Yoda)]
+        #[case::legendary_pokemon(144, "articuno", Some("sky"), true, TranslatorType::Yoda)]
+        #[case::cave_and_legendary(150, "mewtwo", Some("cave"), true, TranslatorType::Yoda)]
+        #[case::forest_non_legendary(
+            25,
+            "pikachu",
+            Some("forest"),
+            false,
+            TranslatorType::Shakespeare
+        )]
+        #[case::no_habitat_non_legendary(132, "ditto", None, false, TranslatorType::Shakespeare)]
+        fn returns_correct_translator_type(
+            #[case] id: i32,
+            #[case] name: &str,
+            #[case] habitat: Option<&str>,
+            #[case] is_legendary: bool,
+            #[case] expected: TranslatorType,
+        ) {
             let pokemon = Pokemon {
-                id: 1,
-                name: "zubat".to_string(),
-                habitat: Some("cave".to_string()),
-                is_legendary: false,
+                id,
+                name: name.to_string(),
+                habitat: habitat.map(String::from),
+                is_legendary,
                 description: None,
             };
 
-            assert_eq!(pokemon.get_translator(), TranslatorType::Yoda);
-        }
-
-        #[test]
-        fn returns_yoda_for_legendary_pokemon() {
-            let pokemon = Pokemon {
-                id: 144,
-                name: "articuno".to_string(),
-                habitat: Some("sky".to_string()),
-                is_legendary: true,
-                description: None,
-            };
-
-            assert_eq!(pokemon.get_translator(), TranslatorType::Yoda);
-        }
-
-        #[test]
-        fn returns_yoda_for_cave_habitat_and_legendary() {
-            let pokemon = Pokemon {
-                id: 150,
-                name: "mewtwo".to_string(),
-                habitat: Some("cave".to_string()),
-                is_legendary: true,
-                description: None,
-            };
-
-            assert_eq!(pokemon.get_translator(), TranslatorType::Yoda);
-        }
-
-        #[test]
-        fn returns_shakespeare_for_non_cave_non_legendary() {
-            let pokemon = Pokemon {
-                id: 25,
-                name: "pikachu".to_string(),
-                habitat: Some("forest".to_string()),
-                is_legendary: false,
-                description: None,
-            };
-
-            assert_eq!(pokemon.get_translator(), TranslatorType::Shakespeare);
-        }
-
-        #[test]
-        fn returns_shakespeare_for_no_habitat_non_legendary() {
-            let pokemon = Pokemon {
-                id: 132,
-                name: "ditto".to_string(),
-                habitat: None,
-                is_legendary: false,
-                description: None,
-            };
-
-            assert_eq!(pokemon.get_translator(), TranslatorType::Shakespeare);
+            assert_eq!(pokemon.get_translator(), expected);
         }
     }
 }

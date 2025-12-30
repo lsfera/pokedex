@@ -114,115 +114,80 @@ impl Translator for FunTranslator {
 mod tests {
 
     use super::*;
+    use rstest::rstest;
 
+    /// Parameterized test for successful translations with different translator types
+    #[rstest]
+    #[case::shakespeare(
+        TranslatorType::Shakespeare,
+        "/shakespeare.json",
+        "Hello",
+        r#"{"success":{"total":1},"contents":{"translation":"shakespeare","text":"Hello","translated":"Hark, Hello"}}"#,
+        "Hark, Hello"
+    )]
+    #[case::yoda(
+        TranslatorType::Yoda,
+        "/yoda.json",
+        "Hello",
+        r#"{"success":{"total":1},"contents":{"translation":"yoda","text":"Hello","translated":"Hello, you say must"}}"#,
+        "Hello, you say must"
+    )]
     #[tokio::test]
-    async fn translates_text_successfully_with_shakespeare() {
+    async fn translates_text_successfully(
+        #[case] translator_type: TranslatorType,
+        #[case] endpoint: &str,
+        #[case] input_text: &str,
+        #[case] response_body: &str,
+        #[case] expected_translation: &str,
+    ) {
         let mut server = mockito::Server::new_async().await;
         let mock = server
-            .mock("POST", "/shakespeare.json")
+            .mock("POST", endpoint)
             .match_header("content-type", "application/x-www-form-urlencoded")
-            .match_body("text=Hello")
+            .match_body(format!("text={}", input_text).as_str())
             .with_status(200)
             .with_header("content-type", "application/json")
-            .with_body(r#"{"success":{"total":1},"contents":{"translation":"shakespeare","text":"Hello","translated":"Hark, Hello"}}"#)
+            .with_body(response_body)
             .create_async()
             .await;
 
         let translator = FunTranslator::new(reqwest::Client::new(), server.url());
 
-        let result = translator
-            .translate("Hello", TranslatorType::Shakespeare)
-            .await;
+        let result = translator.translate(input_text, translator_type).await;
 
         assert!(result.is_ok());
         let response = result.unwrap();
-        assert_eq!(response.contents.translated, "Hark, Hello");
+        assert_eq!(response.contents.translated, expected_translation);
         mock.assert_async().await;
     }
 
+    /// Parameterized test for HTTP error status codes
+    #[rstest]
+    #[case::not_found(404, HttpClientError::NotFound)]
+    #[case::rate_limited(429, HttpClientError::RateLimited)]
+    #[case::service_unavailable(503, HttpClientError::ServiceUnavailable)]
+    #[case::server_error(500, HttpClientError::ServerError)]
     #[tokio::test]
-    async fn translates_text_successfully_with_yoda() {
-        let mut server = mockito::Server::new_async().await;
-        let mock = server
-            .mock("POST", "/yoda.json")
-            .match_header("content-type", "application/x-www-form-urlencoded")
-            .match_body("text=Hello")
-            .with_status(200)
-            .with_header("content-type", "application/json")
-            .with_body(r#"{"success":{"total":1},"contents":{"translation":"yoda","text":"Hello","translated":"Hello, you say must"}}"#)
-            .create_async()
-            .await;
-
-        let translator = FunTranslator::new(reqwest::Client::new(), server.url());
-
-        let result = translator.translate("Hello", TranslatorType::Yoda).await;
-
-        assert!(result.is_ok());
-        let response = result.unwrap();
-        assert_eq!(response.contents.translated, "Hello, you say must");
-        mock.assert_async().await;
-    }
-
-    #[tokio::test]
-    async fn returns_not_found_on_404() {
+    async fn returns_error_on_http_status(
+        #[case] status_code: usize,
+        #[case] expected_error: HttpClientError,
+    ) {
         let mut server = mockito::Server::new_async().await;
         let mock = server
             .mock("POST", "/shakespeare.json")
             .match_header("content-type", "application/x-www-form-urlencoded")
-            .match_body("text=Unknown")
-            .with_status(404)
+            .match_body("text=TestInput")
+            .with_status(status_code)
             .create_async()
             .await;
 
         let translator = FunTranslator::new(reqwest::Client::new(), server.url());
 
         let result = translator
-            .translate("Unknown", TranslatorType::Shakespeare)
+            .translate("TestInput", TranslatorType::Shakespeare)
             .await;
 
-        assert!(matches!(result, Err(HttpClientError::NotFound)));
-        mock.assert_async().await;
-    }
-
-    #[tokio::test]
-    async fn returns_rate_limited_on_429() {
-        let mut server = mockito::Server::new_async().await;
-        let mock = server
-            .mock("POST", "/shakespeare.json")
-            .match_header("content-type", "application/x-www-form-urlencoded")
-            .match_body("text=Unknown")
-            .with_status(429)
-            .create_async()
-            .await;
-
-        let translator = FunTranslator::new(reqwest::Client::new(), server.url());
-
-        let result = translator
-            .translate("Unknown", TranslatorType::Shakespeare)
-            .await;
-
-        assert!(matches!(result, Err(HttpClientError::RateLimited)));
-        mock.assert_async().await;
-    }
-
-    #[tokio::test]
-    async fn returns_service_unavailable_on_503() {
-        let mut server = mockito::Server::new_async().await;
-        let mock = server
-            .mock("POST", "/shakespeare.json")
-            .match_header("content-type", "application/x-www-form-urlencoded")
-            .match_body("text=Hello")
-            .with_status(503)
-            .create_async()
-            .await;
-
-        let translator = FunTranslator::new(reqwest::Client::new(), server.url());
-
-        let result = translator
-            .translate("Hello", TranslatorType::Shakespeare)
-            .await;
-
-        assert!(matches!(result, Err(HttpClientError::ServiceUnavailable)));
+        assert!(matches!(&result, Err(e) if *e == expected_error));
         mock.assert_async().await;
     }
 
@@ -246,29 +211,6 @@ mod tests {
             .await;
 
         assert!(matches!(result, Err(HttpClientError::ParseError)));
-        mock.assert_async().await;
-    }
-
-    #[tokio::test]
-    async fn returns_internal_server_error_on_server_error() {
-        let mut server = mockito::Server::new_async().await;
-        let mock = server
-            .mock("POST", "/shakespeare.json")
-            .match_header("content-type", "application/x-www-form-urlencoded")
-            .match_body("text=Hello")
-            .with_status(500)
-            .with_body("Internal Server Error")
-            .create_async()
-            .await;
-
-        let translator = FunTranslator::new(reqwest::Client::new(), server.url());
-
-        let result = translator
-            .translate("Hello", TranslatorType::Shakespeare)
-            .await;
-
-        assert!(result.is_err());
-        assert!(result.is_err_and(|e| e == HttpClientError::ServerError));
         mock.assert_async().await;
     }
 

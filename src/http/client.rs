@@ -15,7 +15,7 @@ impl fmt::Display for TranslatorType {
     }
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub enum HttpClientError {
     NotAcceptable,
     NotFound,
