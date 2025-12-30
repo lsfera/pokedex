@@ -32,6 +32,13 @@ Examples
 # Get Pokemon data (English by default)
 curl http://localhost:8080/pokemon/pikachu
 
+# enable compression (nginx)
+curl -v --compressed  \
+  'http://localhost:8080/pokemon/mewtwo' \
+  -H 'Accept-encoding: gzip' \
+  -H 'accept: application/json' \
+  -H 'accept-language: it'
+
 # Get translated description
 curl http://localhost:8080/pokemon/ditto/translation/
 
