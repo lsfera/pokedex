@@ -37,3 +37,9 @@ rstest     = "0.24"
 
 [package.metadata.cargo-machete]
 ignored = ["serde_json", "urlencoding", "tower-http"]
+
+[profile.release]
+strip         = true # Automatically strip symbols from the binary.
+opt-level     = "z"  # Optimize for size.
+lto           = true # Enable Link Time Optimization.
+codegen-units = 1    # Better optimizations with fewer codegen units.
