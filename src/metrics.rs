@@ -126,7 +126,7 @@ pub fn init() {
 /// - Request duration histogram by method and path
 ///
 /// Excludes internal endpoints from tracking:
-/// - `/health` - health check endpoint
+/// - `/healthz` - health check endpoint
 /// - `/metrics` - metrics endpoint (avoid recursive tracking)
 /// - `/swagger-ui` - documentation UI
 /// - `/api-docs` - OpenAPI spec
@@ -172,13 +172,13 @@ pub async fn track_metrics(req: Request, next: Next) -> Response {
 /// Determines if a path should be excluded from metrics tracking.
 ///
 /// Returns true for internal endpoints that don't need to be tracked:
-/// - Health checks (`/health`)
+/// - Health checks (`/healthz`)
 /// - Metrics endpoint (`/metrics`)
 /// - Swagger UI (`/swagger-ui/*`)
 /// - API documentation (`/api-docs/*`)
 fn should_skip_tracking(path: &str) -> bool {
     // Fast path: check exact matches first (most common)
-    if path == "/health" || path == "/metrics" {
+    if path == "/healthz" || path == "/metrics" {
         return true;
     }
 
@@ -232,7 +232,7 @@ mod tests {
 
     #[test]
     fn test_should_skip_tracking_health() {
-        assert!(should_skip_tracking("/health"));
+        assert!(should_skip_tracking("/healthz"));
     }
 
     #[test]

@@ -9,7 +9,7 @@
 //! - **OpenAPI Integration**: Auto-generated API documentation with Swagger UI
 //! - **Prometheus Metrics**: Built-in metrics endpoint for monitoring
 //! - **Distributed Tracing**: Structured logging with tracing spans for observability
-//! - **Health Checks**: Dedicated `/health` endpoint for service availability checks
+//! - **Health Checks**: Dedicated `/healthz` endpoint for service availability checks
 //!
 //! ## Architecture
 //!
@@ -484,12 +484,12 @@ async fn get_pokemon_translation(
 /// # Example
 ///
 /// ```sh
-/// curl http://localhost:5000/health
+/// curl http://localhost:5000/healthz
 /// # Response: 200 OK (empty body)
 /// ```
 #[utoipa::path(
     get,
-    path = "/health",
+    path = "/healthz",
     description = "Health check endpoint",
     tag = "system",
     responses((status = 200, description = "Service is healthy"))

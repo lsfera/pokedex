@@ -3,6 +3,7 @@ ARG TARGETARCH
 ARG TARGETPLATFORM
 ARG TARGETOS
 
+# Stage 1: Build the Rust binary with musl for static linking
 FROM clux/muslrust:stable AS builder
 RUN groupadd -g 10001 -r dockergrp && useradd -r -g dockergrp -u 10001 dockeruser
 ARG BINARY_NAME_DEFAULT
@@ -33,7 +34,10 @@ RUN set -eux; TARGET_TRIPLE=$(cat /tmp/target_triple); \
     cp target/"$TARGET_TRIPLE"/release/$BINARY_NAME /build-out/; \
     strip /build-out/$BINARY_NAME || true
 
-FROM alpine AS runtime
+# Stage 2: Build a small HTTP GET utility for health checks
+FROM ghcr.io/cryptaliagy/httpget:latest AS httpget
+# Stage 3: Create the final minimal runtime image
+FROM scratch AS runtime
 COPY --from=builder /etc/passwd /etc/passwd
 USER dockeruser
 
@@ -52,6 +56,10 @@ ENV RUST_LOG="info,$BINARY_NAME=debug" \
     FUN_TRANSLATIONS_SECURE="true"
 
 COPY --from=builder /build-out/$BINARY_NAME /
+COPY --from=httpget /httpget /
+
+
+HEALTHCHECK --interval=30s --timeout=30s --start-period=5s --retries=3 CMD ["/httpget", "http://127.0.0.1:${PORT}/healthz"] 
 
 EXPOSE ${PORT}
 ENTRYPOINT ["/pokemon-rest-api"]

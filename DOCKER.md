@@ -15,7 +15,7 @@ View API logs only:   docker-compose logs -f api
 Access Points
 -------------
 Swagger UI:  http://localhost:8080/swagger-ui/
-Health:      http://localhost:8080/health
+Health:      http://localhost:8080/healthz
 Metrics:     http://localhost:8080/metrics
 
 API Endpoints

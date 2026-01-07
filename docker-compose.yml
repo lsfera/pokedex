@@ -20,7 +20,7 @@ services:
       - pokemon-net
     restart: unless-stopped
     healthcheck:
-      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://127.0.0.1:5050/health || exit 1"]
+      test: ["CMD", "/httpget", "http://127.0.0.1:5050/healthz"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -59,7 +59,7 @@ services:
       - api
       - swagger-ui
     healthcheck:
-      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost/health || exit 1"]
+      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost/healthz || exit 1"]
       interval: 30s
       timeout: 10s
       retries: 3
