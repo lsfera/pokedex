@@ -1,0 +1,23 @@
+name: audit dependencies
+
+on:
+  push:
+    branches:
+      - '**'
+    tags-ignore:
+      - '**'
+
+jobs:
+  audit-dependencies:
+    runs-on: ubuntu-latest
+    steps:
+      - name: install and update packages
+        run: |
+          sudo apt update && sudo apt upgrade -y
+          rustup update stable
+          cargo install --locked --git https://github.com/rustsec/rustsec cargo-audit
+
+      - uses: actions/checkout@ff7abcd0c3c05ccf6adc123a8cd1fd4fb30fb493 # v5.0.0
+
+      - name: cargo audit
+        run: cargo audit
