@@ -3,7 +3,7 @@ use regex::Regex;
 use std::env;
 use tracing_subscriber::EnvFilter;
 
-use crate::constants::{DEFAULT_PORT, DEFAULT_RUST_LOG};
+use crate::constants::{DEFAULT_PORT, DEFAULT_REQUEST_TIMEOUT_SECONDS, DEFAULT_RUST_LOG};
 
 // NOTE: unwrap() is acceptable here because the regex pattern is a compile-time constant
 // and we assume it's correct.
@@ -72,14 +72,23 @@ impl ConfigDescriptor {
         mandatory: None,
         default_value: Some(DEFAULT_RUST_LOG),
     };
+    const REQUEST_TIMEOUT: Self = Self {
+        cli_arg_name: "--request-timeout",
+        env_var_name: "REQUEST_TIMEOUT_SECONDS",
+        description: "timeout for external API requests in seconds (1-300)",
+        name: "request timeout",
+        mandatory: None,
+        default_value: Some(DEFAULT_REQUEST_TIMEOUT_SECONDS),
+    };
 
-    const ALL: [Self; 6] = [
+    const ALL: [Self; 7] = [
         Self::POKEAPI_HOST,
         Self::FUN_TRANSLATIONS_HOST,
         Self::PORT,
         Self::POKEAPI_SECURE,
         Self::FUN_TRANSLATIONS_SECURE,
         Self::RUST_LOG,
+        Self::REQUEST_TIMEOUT,
     ];
 
     pub fn print_usage() {
@@ -144,6 +153,7 @@ pub struct AppConfig {
     pub fun_translations_secure: bool,
     pub port: u16,
     pub rust_log: String,
+    pub request_timeout_seconds: u64,
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -221,6 +231,13 @@ impl AppConfig {
                 Some(s) => parse_rust_log_config(&s),
             }
         };
+        let request_timeout_seconds = {
+            let desc = &ConfigDescriptor::REQUEST_TIMEOUT;
+            match parse(desc) {
+                None => Ok(DEFAULT_REQUEST_TIMEOUT_SECONDS.parse::<u64>().unwrap()),
+                Some(s) => parse_timeout_config(&s, desc.name),
+            }
+        };
         match (
             &pokeapi_host,
             &fun_translations_host,
@@ -228,6 +245,7 @@ impl AppConfig {
             &fun_translations_secure,
             &port,
             &rust_log,
+            &request_timeout_seconds,
         ) {
             (
                 Ok(pokeapi_host),
@@ -236,6 +254,7 @@ impl AppConfig {
                 Ok(fun_translations_secure),
                 Ok(port),
                 Ok(rust_log),
+                Ok(request_timeout_seconds),
             ) => Ok(AppConfig {
                 pokeapi_host: pokeapi_host.clone(),
                 fun_translations_host: fun_translations_host.clone(),
@@ -243,6 +262,7 @@ impl AppConfig {
                 fun_translations_secure: *fun_translations_secure,
                 port: *port,
                 rust_log: rust_log.clone(),
+                request_timeout_seconds: *request_timeout_seconds,
             }),
             _ => {
                 let errors = [
@@ -252,6 +272,7 @@ impl AppConfig {
                     fun_translations_secure.err(),
                     port.err(),
                     rust_log.err(),
+                    request_timeout_seconds.err(),
                 ]
                 .into_iter()
                 .flatten()
@@ -375,6 +396,36 @@ fn parse_rust_log_config(value: &str) -> Result<String, ConfigError> {
                 trimmed
             ))
         })
+}
+
+/// Parses a timeout configuration value in seconds.
+///
+/// # Arguments
+///
+/// * `value` - The string value to parse
+/// * `name` - The configuration name for error messages
+///
+/// # Returns
+///
+/// Returns `Ok(u64)` on success (1-300 seconds), or `ConfigError::InvalidFormat` if:
+/// - The value cannot be parsed as a number
+/// - The parsed value is 0 or exceeds 300 seconds
+fn parse_timeout_config(value: &str, name: &'static str) -> Result<u64, ConfigError> {
+    match value.parse::<u64>() {
+        Ok(timeout) if timeout > 0 && timeout <= 300 => Ok(timeout),
+        Ok(0) => Err(ConfigError::InvalidFormat(format!(
+            "invalid {} value: {} (must be 1-300 seconds)",
+            name, value
+        ))),
+        Ok(_) => Err(ConfigError::InvalidFormat(format!(
+            "invalid {} value: {} (must be 1-300 seconds, got value > 300)",
+            name, value
+        ))),
+        Err(_) => Err(ConfigError::InvalidFormat(format!(
+            "timeout must be a valid number: {} (expected 1-300 seconds)",
+            value
+        ))),
+    }
 }
 
 #[cfg(test)]
@@ -571,6 +622,7 @@ mod tests {
             fun_translations_secure: true,
             port: 5000,
             rust_log: "info".to_string(),
+            request_timeout_seconds: 30,
         };
         assert_eq!(config.pokeapi_base_url(), "https://pokeapi.co/api/v2");
     }
@@ -584,6 +636,7 @@ mod tests {
             fun_translations_secure: false,
             port: 5000,
             rust_log: "info".to_string(),
+            request_timeout_seconds: 30,
         };
         assert_eq!(config.pokeapi_base_url(), "http://localhost/api/v2");
     }
@@ -597,6 +650,7 @@ mod tests {
             fun_translations_secure: true,
             port: 5000,
             rust_log: "info".to_string(),
+            request_timeout_seconds: 30,
         };
         assert_eq!(
             config.fun_translations_base_url(),
@@ -613,6 +667,7 @@ mod tests {
             fun_translations_secure: false,
             port: 5000,
             rust_log: "info".to_string(),
+            request_timeout_seconds: 30,
         };
         assert_eq!(
             config.fun_translations_base_url(),
@@ -624,7 +679,7 @@ mod tests {
     #[test]
     fn config_descriptor_all_array_contains_all_fields() {
         let all = ConfigDescriptor::ALL;
-        assert_eq!(all.len(), 6);
+        assert_eq!(all.len(), 7);
 
         let names: Vec<&str> = all.iter().map(|d| d.name).collect();
         assert!(names.contains(&"pokeapi host"));
@@ -633,6 +688,7 @@ mod tests {
         assert!(names.contains(&"fun translations secure"));
         assert!(names.contains(&"port"));
         assert!(names.contains(&"rust log"));
+        assert!(names.contains(&"request timeout"));
     }
 
     #[test]
@@ -656,6 +712,7 @@ mod tests {
         );
         assert!(ConfigDescriptor::PORT.default_value.is_some());
         assert!(ConfigDescriptor::RUST_LOG.default_value.is_some());
+        assert!(ConfigDescriptor::REQUEST_TIMEOUT.default_value.is_some());
     }
 
     #[test]
@@ -666,6 +723,54 @@ mod tests {
                 .default_value
                 .is_none()
         );
+    }
+
+    // Timeout Configuration Tests
+    #[test]
+    fn parse_timeout_config_accepts_valid_values() {
+        assert_eq!(parse_timeout_config("1", "timeout").unwrap(), 1);
+        assert_eq!(parse_timeout_config("30", "timeout").unwrap(), 30);
+        assert_eq!(parse_timeout_config("120", "timeout").unwrap(), 120);
+        assert_eq!(parse_timeout_config("300", "timeout").unwrap(), 300);
+    }
+
+    #[test]
+    fn parse_timeout_config_rejects_zero() {
+        let result = parse_timeout_config("0", "timeout");
+        assert!(result.is_err());
+        let err_msg = result.unwrap_err().to_string();
+        assert!(err_msg.contains("must be 1-300"));
+    }
+
+    #[test]
+    fn parse_timeout_config_rejects_too_large() {
+        let result = parse_timeout_config("301", "timeout");
+        assert!(result.is_err());
+        let err_msg = result.unwrap_err().to_string();
+        assert!(err_msg.contains("must be 1-300"));
+    }
+
+    #[test]
+    fn parse_timeout_config_rejects_invalid_numbers() {
+        let result = parse_timeout_config("abc", "timeout");
+        assert!(result.is_err());
+        let err_msg = result.unwrap_err().to_string();
+        assert!(err_msg.contains("must be a valid number"));
+    }
+
+    #[test]
+    fn parse_timeout_config_rejects_negative() {
+        let result = parse_timeout_config("-10", "timeout");
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn parse_timeout_config_error_messages_are_descriptive() {
+        let result = parse_timeout_config("500", "request timeout");
+        assert!(result.is_err());
+        let err_msg = result.unwrap_err().to_string();
+        assert!(err_msg.contains("request timeout"));
+        assert!(err_msg.contains("1-300"));
     }
 
     // CliParser Tests

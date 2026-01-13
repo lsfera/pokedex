@@ -31,17 +31,26 @@
 
 use accept_language::parse;
 use axum::{
-    extract::{Path, State},
+    extract::{Path, Request, State},
     http::StatusCode,
     middleware,
     response::{AppendHeaders, IntoResponse, Json, Response},
 };
-use hyper::{HeaderMap, header::CONTENT_LANGUAGE};
+use hyper::{HeaderMap, body::Incoming, header::CONTENT_LANGUAGE, service::service_fn};
+use hyper_util::rt::{TokioExecutor, TokioIo};
+use hyper_util::server::conn::auto::Builder as AutoBuilder;
 use std::{process::exit, sync::Arc};
+#[cfg(not(target_env = "msvc"))]
+use tikv_jemallocator::Jemalloc;
+use tower::Service;
 use tracing::{debug, info, warn};
 use utoipa::OpenApi;
 use utoipa_axum::router::OpenApiRouter;
 use utoipa_axum::routes;
+
+#[cfg(not(target_env = "msvc"))]
+#[global_allocator]
+static GLOBAL: Jemalloc = Jemalloc;
 
 mod config;
 mod constants;
@@ -224,7 +233,11 @@ async fn main() -> anyhow::Result<()> {
 
     // Create a shared HTTP client for all external API calls
     // This enables connection pooling and reduces resource usage
-    let http_client = reqwest::Client::new();
+    let http_client = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(
+            config.request_timeout_seconds,
+        ))
+        .build()?;
 
     let pokeapi_base_client = Box::new(PokemonApiProxyClient::new(
         http_client.clone(),
@@ -262,9 +275,29 @@ async fn main() -> anyhow::Result<()> {
         .with_state(state);
 
     let listener = tokio::net::TcpListener::bind(format!("0.0.0.0:{}", config.port)).await?;
-    info!("Server listening on 0.0.0.0:{}", config.port);
-    axum::serve(listener, app).await?;
-    Ok(())
+    info!(
+        "Server listening (HTTP/1.1 + HTTP/2) on 0.0.0.0:{}",
+        config.port
+    );
+
+    loop {
+        let (stream, remote_addr) = listener.accept().await?;
+        let app = app.clone();
+        tokio::spawn(async move {
+            let io = TokioIo::new(stream);
+            let hyper_service = service_fn(move |request: Request<Incoming>| {
+                let mut svc = app.clone();
+                async move { svc.call(request).await }
+            });
+
+            if let Err(err) = AutoBuilder::new(TokioExecutor::new())
+                .serve_connection_with_upgrades(io, hyper_service)
+                .await
+            {
+                warn!(%remote_addr, %err, "failed to serve connection");
+            }
+        });
+    }
 }
 
 /// Fetches Pokémon information with language negotiation.

@@ -53,7 +53,8 @@ ENV RUST_LOG="info,$BINARY_NAME=debug" \
     POKEAPI_HOST="pokeapi.co" \
     POKEAPI_SECURE="true" \
     FUN_TRANSLATIONS_HOST="api.funtranslations.com" \
-    FUN_TRANSLATIONS_SECURE="true"
+    FUN_TRANSLATIONS_SECURE="true" \
+    REQUEST_TIMEOUT_SECONDS=30
 
 COPY --from=builder /build-out/$BINARY_NAME /
 COPY --from=httpget /httpget /

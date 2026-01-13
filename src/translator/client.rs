@@ -90,7 +90,8 @@ impl Translator for FunTranslator {
         text: &str,
         translator_type: TranslatorType,
     ) -> Result<TranslationResponse, HttpClientError> {
-        self.client
+        let response = self
+            .client
             .post(format!("{}/{}.json", self.base_url, translator_type,))
             .form(&[("text", text)])
             .send()
@@ -103,9 +104,15 @@ impl Translator for FunTranslator {
                 StatusCode::INTERNAL_SERVER_ERROR => Err(HttpClientError::ServerError),
                 // NOTE: by default redirects followed automatically by reqwest::Client: https://docs.rs/reqwest/latest/reqwest/#redirect-policies
                 _ => Ok(r),
-            })?
-            .json::<TranslationResponse>()
+            })?;
+
+        let mut bytes = response
+            .bytes()
             .await
+            .map_err(|_| HttpClientError::ParseError)?
+            .to_vec();
+
+        simd_json::from_slice::<TranslationResponse>(&mut bytes)
             .map_err(|_| HttpClientError::ParseError)
     }
 }

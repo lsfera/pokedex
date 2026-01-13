@@ -177,7 +177,8 @@ impl PokemonApiProxyClient {
 #[async_trait]
 impl PokemonApiProxy for PokemonApiProxyClient {
     async fn get_species(&self, species_url: &str) -> Result<SpeciesResponse, HttpClientError> {
-        self.client
+        let response = self
+            .client
             .get(species_url)
             .send()
             .await
@@ -187,14 +188,21 @@ impl PokemonApiProxy for PokemonApiProxyClient {
                 StatusCode::SERVICE_UNAVAILABLE => Err(HttpClientError::ServiceUnavailable),
                 // NOTE: by default redirects followed automatically by reqwest::Client: https://docs.rs/reqwest/latest/reqwest/#redirect-policies
                 _ => Ok(r),
-            })?
-            .json::<SpeciesResponse>()
+            })?;
+
+        let mut bytes = response
+            .bytes()
             .await
+            .map_err(|_| HttpClientError::ParseError)?
+            .to_vec();
+
+        simd_json::from_slice::<SpeciesResponse>(&mut bytes)
             .map_err(|_| HttpClientError::ParseError)
     }
 
     async fn get_base_pokemon(&self, name: &str) -> Result<BasePokemonResponse, HttpClientError> {
-        self.client
+        let response = self
+            .client
             .get(format!("{}/pokemon/{}", self.base_url, name))
             .send()
             .await
@@ -205,9 +213,15 @@ impl PokemonApiProxy for PokemonApiProxyClient {
                 StatusCode::INTERNAL_SERVER_ERROR => Err(HttpClientError::ServerError),
                 // NOTE: by default redirects followed automatically by reqwest::Client: https://docs.rs/reqwest/latest/reqwest/#redirect-policies
                 _ => Ok(r),
-            })?
-            .json::<BasePokemonResponse>()
+            })?;
+
+        let mut bytes = response
+            .bytes()
             .await
+            .map_err(|_| HttpClientError::ParseError)?
+            .to_vec();
+
+        simd_json::from_slice::<BasePokemonResponse>(&mut bytes)
             .map_err(|_| HttpClientError::ParseError)
     }
 }

@@ -2,6 +2,16 @@
 
 A Rust web service built with [axum](https://github.com/tokio-rs/axum) that enriches Pokémon data from [PokéAPI](https://pokeapi.co/) by applying fun translations based on Pokémon characteristics.
 
+## features
+
+- **Content Negotiation**: HTTP `Accept-Language` header support for multi-language descriptions
+- **Performance Optimized**: SIMD-accelerated JSON parsing with [simd-json](https://github.com/simd-lite/simd-json) for faster API responses
+- **Low-Footprint Allocator**: Uses [tikv-jemallocator](https://lib.rs/crates/tikv-jemallocator) as the global allocator (non-MSVC targets) to reduce fragmentation and improve throughput under load
+- **OpenAPI Integration**: Auto-generated API documentation with Swagger UI
+- **Prometheus Metrics**: Built-in metrics endpoint for monitoring
+- **Distributed Tracing**: Structured logging with request tracking
+- **Configurable Timeouts**: Prevent hanging requests with configurable timeout settings (1-300 seconds)
+
 ## configuration
 
 The application can be configured via command-line arguments or environment variables. Command-line arguments take precedence over environment variables.
@@ -13,6 +23,7 @@ The application can be configured via command-line arguments or environment vari
 | **pokeapi secure** | use HTTPS for [PokéAPI](https://pokeapi.co/) communication | `--pokeapi-secure` | `POKEAPI_SECURE` | `true` | |
 | **fun translations host** | hostname for [fun translations API](https://funtranslations.com/api/) | `--fun-translations-host` | `FUN_TRANSLATIONS_HOST` | `api.funtranslations.com` | x |
 | **fun translations secure** | use HTTPS for [fun translations API](https://funtranslations.com/api/) communication | `--fun-translations-secure` | `FUN_TRANSLATIONS_SECURE` | `true` | |
+| **request timeout** | timeout for external API requests in seconds (1-300) | `--request-timeout` | `REQUEST_TIMEOUT_SECONDS` | `30` | |
 | **rust log** | tracing log level (e.g., `info`, `debug`, `trace`) | `--rust-log` | `RUST_LOG` | `info` | | 
 
 ## api documentation
