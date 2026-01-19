@@ -40,7 +40,7 @@ tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt"] }
 tikv-jemallocator = "0.6"
 
 [dev-dependencies]
-jsonschema = "0.38"
+jsonschema = "0.40"
 tokio-test = "0.4"
 tower      = "0.5"
 hyper      = "1"
