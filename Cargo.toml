@@ -8,7 +8,7 @@ accept-language = "3"
 axum = "0.8"
 tokio = { version = "1", features = ["rt-multi-thread", "macros"] }
 serde = { version = "1", features = ["derive"] }
-simd-json = "0.14"
+simd-json = "0.17"
 reqwest = { version = "0.12", features = [
     "json",
     "rustls-tls",
