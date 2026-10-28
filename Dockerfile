@@ -39,6 +39,8 @@ FROM ghcr.io/cryptaliagy/httpget:latest AS httpget
 # Stage 3: Create the final minimal runtime image
 FROM scratch AS runtime
 COPY --from=builder /etc/passwd /etc/passwd
+# reqwest (rustls) loads the system trust store; scratch has none
+COPY --from=builder /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/ca-certificates.crt
 USER dockeruser
 
 ARG BINARY_NAME_DEFAULT
