@@ -8,7 +8,7 @@ accept-language = "3"
 axum = "0.8"
 tokio = { version = "1", features = ["rt-multi-thread", "macros"] }
 serde = { version = "1", features = ["derive"] }
-simd-json = "0.18"
+simd-json = "0.19"
 reqwest = { version = "0.13", features = [
     "json",
     "form",
@@ -41,7 +41,7 @@ tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt"] }
 tikv-jemallocator = "0.7"
 
 [dev-dependencies]
-jsonschema = "0.59"
+jsonschema = "0.60"
 tokio-test = "0.4"
 tower      = "0.5"
 hyper      = "1"
