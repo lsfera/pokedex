@@ -46,7 +46,7 @@ tokio-test = "0.4"
 tower      = "0.5"
 hyper      = "1"
 mockito    = "1"
-rstest     = "0.28"
+rstest     = "0.29"
 
 [package.metadata.cargo-machete]
 ignored = ["serde_json", "urlencoding", "tower-http"]
